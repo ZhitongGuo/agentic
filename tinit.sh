@@ -186,27 +186,6 @@ if [[ "$SHOW_ALL" == true ]]; then
     # |          |       TERMINAL       |
     # +----------+----------+-----------+
 
-    # Split right 2/3 for middle+right columns
-    tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
-
-    # Split that into middle and right columns
-    tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
-
-    # Split middle column vertically: Executor stays top, Terminal bottom
-    tmux split-window -v -t "$SESSION:0.1" -c "$DIR" -p 50
-
-    # Panes:
-    #   0 = Master (left, full height)
-    #   1 = Executor (middle-top)
-    #   2 = Validator (right-top — full height right column)
-    #   3 = Terminal (middle-bottom)
-    # But we want Terminal to span both middle and right bottom.
-    # tmux can't merge panes, so use a different split order:
-
-    # Actually, let's redo this. Start fresh:
-    tmux kill-session -t "$SESSION" 2>/dev/null || true
-    tmux new-session -d -s "$SESSION" -c "$DIR"
-
     # Master on the left (1/3)
     tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
 
@@ -220,7 +199,7 @@ if [[ "$SHOW_ALL" == true ]]; then
     #   0 = Master (left, full height)
     #   1 = Executor (top-middle)
     #   2 = Validator (top-right)
-    #   3 = Terminal (bottom-right, full width of right side)
+    #   3 = Terminal (bottom, full width of right side)
 
     sleep 1
 
