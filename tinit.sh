@@ -123,15 +123,6 @@ if [[ "$SHOW_ALL" == true ]]; then
   # Even out the layout
   tmux select-layout -t "$SESSION" even-horizontal
 
-  # Show pane titles in borders (for regular tmux users)
-  tmux select-pane -t "$SESSION:0.0" -T "MASTER"
-  tmux select-pane -t "$SESSION:0.1" -T "EXECUTOR"
-  tmux select-pane -t "$SESSION:0.2" -T "VALIDATOR"
-  tmux select-pane -t "$SESSION:0.3" -T "TERMINAL"
-  tmux set-option -t "$SESSION" pane-border-status top
-  tmux set-option -t "$SESSION" pane-border-format " #{pane_title} "
-  tmux set-option -t "$SESSION" set-titles on
-
   sleep 1
 
   # Launch agents in their panes
@@ -154,9 +145,9 @@ else
   cat > "$MASTER_LAUNCHER" <<LAUNCHER_EOF
 #!/bin/bash
 echo ""
-echo "╔══════════════════════════╗"
-echo "║  MASTER                  ║"
-echo "╚══════════════════════════╝"
+echo "+------------------------+"
+echo "|  MASTER                |"
+echo "+------------------------+"
 echo ""
 exec claude --dangerously-enable-internet-mode --dangerously-skip-permissions \\
   --settings '${AGENTIC_DIR}/profiles/master.json' \\
@@ -172,14 +163,6 @@ LAUNCHER_EOF
 
   # Split vertically (left/right)
   tmux split-window -h -t "$SESSION" -c "$DIR"
-
-  # Label panes
-  tmux select-pane -t "$SESSION:0.0" -T "MASTER"
-  tmux select-pane -t "$SESSION:0.1" -T "TERMINAL"
-
-  # Show pane titles in the border
-  tmux set-option -t "$SESSION" pane-border-status top
-  tmux set-option -t "$SESSION" pane-border-format " #{pane_title} "
 
   sleep 1
 

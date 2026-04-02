@@ -110,12 +110,20 @@ write_launcher() {
   launcher="$(mktemp "/tmp/agent-launcher-${role}-XXXXXX.sh")"
   local label
   label="$(echo "$role" | tr '[:lower:]' '[:upper:]')"
+  # Build a banner with exact alignment
+  local banner
+  case "$label" in
+    MASTER)    banner="|  MASTER                |" ;;
+    EXECUTOR)  banner="|  EXECUTOR              |" ;;
+    VALIDATOR) banner="|  VALIDATOR             |" ;;
+    *)         banner="|  ${label}              |" ;;
+  esac
   cat > "$launcher" <<LAUNCHER_EOF
 #!/bin/bash
 echo ""
-echo "╔══════════════════════════╗"
-echo "║  ${label}$(printf '%*s' $((18 - ${#label})) '')║"
-echo "╚══════════════════════════╝"
+echo "+------------------------+"
+echo "${banner}"
+echo "+------------------------+"
 echo ""
 exec claude --dangerously-enable-internet-mode --dangerously-skip-permissions \\
   --settings '${SCRIPT_DIR}/profiles/${role}.json' \\
