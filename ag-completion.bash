@@ -21,7 +21,7 @@ _ag_completions() {
   case "$subcmd" in
     add)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--no-cd --no-tmux --team --show-all --prefix --branch" -- "$cur"))
+        COMPREPLY=($(compgen -W "--no-cd --no-tmux --team --show-all --editor --prefix --branch" -- "$cur"))
       fi
       ;;
     rm)

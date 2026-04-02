@@ -40,6 +40,7 @@ Options:
   --no-tmux      (add) Don't create a tmux session (just create the worktree)
   --team         (add) Start a 3-agent team (Master, Executor, Validator)
   --show-all     (add) Show all agent panes (requires --team)
+  --editor       (add) Include an nvim pane (requires --show-all)
   --prefix PFX   (add) Override branch prefix (default: $WT_BRANCH_PREFIX)
   --branch NAME  (add) Use exact branch name (single worktree only)
   --force        (rm)  Force remove even with uncommitted changes
@@ -63,6 +64,7 @@ _ag_add() {
   local use_tmux=true
   local use_team=false
   local show_all=false
+  local editor_pane=false
   local prefix="$WT_BRANCH_PREFIX"
   local exact_branch=""
 
@@ -73,6 +75,7 @@ _ag_add() {
       -t|--tmux)   use_tmux=true; shift ;;
       --team)      use_team=true; use_tmux=true; shift ;;
       --show-all)  show_all=true; shift ;;
+      --editor)    editor_pane=true; shift ;;
       --prefix)    prefix="$2"; shift 2 ;;
       --branch)    exact_branch="$2"; shift 2 ;;
       --*)         echo "ag add: unknown flag '$1'"; return 1 ;;
@@ -82,6 +85,11 @@ _ag_add() {
 
   if [[ "$show_all" == true && "$use_team" == false ]]; then
     echo "ag add: --show-all requires --team"
+    return 1
+  fi
+
+  if [[ "$editor_pane" == true && "$show_all" == false ]]; then
+    echo "ag add: --editor requires --show-all"
     return 1
   fi
 
@@ -146,6 +154,9 @@ _ag_add() {
         if [[ "$show_all" == true ]]; then
           tinit_args+=(--show-all)
         fi
+        if [[ "$editor_pane" == true ]]; then
+          tinit_args+=(--editor)
+        fi
       fi
       "$AGENTIC_DIR/tinit.sh" "${tinit_args[@]}"
     elif [[ "$no_cd" == false ]]; then
@@ -168,6 +179,9 @@ _ag_add() {
         tinit_args+=(--team)
         if [[ "$show_all" == true ]]; then
           tinit_args+=(--show-all)
+        fi
+        if [[ "$editor_pane" == true ]]; then
+          tinit_args+=(--editor)
         fi
       fi
 

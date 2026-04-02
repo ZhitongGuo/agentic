@@ -1,11 +1,12 @@
 #!/bin/bash
 # Tmux startup script for agentic workflow
-# Usage: tinit [path] --session NAME [--no-attach] [--team [--show-all]]
+# Usage: tinit [path] --session NAME [--no-attach] [--team [--show-all] [--editor]]
 #   path           - directory to cd into (default: current directory)
 #   --session NAME - tmux session name (required)
 #   --no-attach    - create session without attaching (for batch creation)
 #   --team         - start a 3-agent team (Master, Executor, Validator)
 #   --show-all     - show all agent panes (requires --team)
+#   --editor       - include an nvim pane (requires --show-all)
 
 AGENTIC_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
@@ -14,10 +15,11 @@ DIR=""
 NO_ATTACH=false
 TEAM_MODE=false
 SHOW_ALL=false
+EDITOR_PANE=false
 
 _tinit_usage() {
   cat <<'EOF'
-Usage: tinit [path] --session NAME [--no-attach] [--team [--show-all]]
+Usage: tinit [path] --session NAME [--no-attach] [--team [--show-all] [--editor]]
 
 Create a tmux session with Claude Code (left pane) and a shell (right pane).
 
@@ -29,12 +31,24 @@ Options:
   --no-attach      Create session without attaching (for batch creation)
   --team           Start a 3-agent team (Master, Executor, Validator)
   --show-all       Show all agent panes side by side (requires --team)
+  --editor         Include an nvim pane (requires --show-all)
   --help, -h       Show this help message
 
 Layouts:
-  Default:         [Claude] [Terminal]
-  --team:          [Master] [Terminal]        (Executor/Validator in background)
-  --team --show-all: [Master] [Executor] [Validator] [Terminal]
+  Default:           [Claude] [Terminal]
+  --team:            [Master] [Terminal]  (Executor/Validator in background)
+  --team --show-all:
+    +----------+----------+-----------+
+    |          | EXECUTOR | VALIDATOR |
+    |  MASTER  +----------+-----------+
+    |          |       TERMINAL       |
+    +----------+----------+-----------+
+  --team --show-all --editor:
+    +----------+----------+-----------+
+    |          | EXECUTOR |   NVIM    |
+    |  MASTER  +----------+-----------+
+    |          | VALIDATR | TERMINAL  |
+    +----------+----------+-----------+
 EOF
 }
 
@@ -45,6 +59,7 @@ while [[ $# -gt 0 ]]; do
     --no-attach) NO_ATTACH=true; shift ;;
     --team) TEAM_MODE=true; shift ;;
     --show-all) SHOW_ALL=true; shift ;;
+    --editor) EDITOR_PANE=true; shift ;;
     *) DIR="$1"; shift ;;
   esac
 done
@@ -64,6 +79,11 @@ fi
 
 if [[ "$SHOW_ALL" == true && "$TEAM_MODE" == false ]]; then
   echo "tinit: --show-all requires --team" >&2
+  exit 1
+fi
+
+if [[ "$EDITOR_PANE" == true && "$SHOW_ALL" == false ]]; then
+  echo "tinit: --editor requires --show-all" >&2
   exit 1
 fi
 
@@ -112,40 +132,99 @@ if [[ "$SHOW_ALL" == true ]]; then
   EXECUTOR_LAUNCHER="${LAUNCHERS[1]}"
   VALIDATOR_LAUNCHER="${LAUNCHERS[2]}"
 
-  # Layout:
-  # +------------+------------+-----------+
-  # |            |            | VALIDATOR |
-  # |   MASTER   |  EXECUTOR  +-----------+
-  # |            |            | TERMINAL  |
-  # +------------+------------+-----------+
-
   # Create session — pane 0 is Master (full height left)
   tmux new-session -d -s "$SESSION" -c "$DIR"
 
-  # Split right: pane 1 (will become Executor column)
-  tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
+  if [[ "$EDITOR_PANE" == true ]]; then
+    # Layout with --editor:
+    # +----------+----------+-----------+
+    # |          | EXECUTOR |   NVIM    |
+    # |  MASTER  +----------+-----------+
+    # |          | VALIDATR | TERMINAL  |
+    # +----------+----------+-----------+
 
-  # Split right column again: pane 2 (right-most column)
-  tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
+    # Split right 2/3 for middle+right columns
+    tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
 
-  # Split the right-most column vertically: pane 3 (Terminal, bottom-right)
-  tmux split-window -v -t "$SESSION:0.2" -c "$DIR" -p 50
+    # Split that into middle and right columns
+    tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
 
-  # Panes are now:
-  #   0 = Master (left, full height)
-  #   1 = Executor (middle, full height)
-  #   2 = Validator (top-right)
-  #   3 = Terminal (bottom-right)
+    # Split middle column: Executor (top) / Validator (bottom)
+    tmux split-window -v -t "$SESSION:0.1" -c "$DIR" -p 50
 
-  sleep 1
+    # Split right column: Nvim (top) / Terminal (bottom)
+    tmux split-window -v -t "$SESSION:0.3" -c "$DIR" -p 50
 
-  # Launch agents in their panes
-  tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
-  tmux send-keys -t "$SESSION:0.1" "'$EXECUTOR_LAUNCHER'" C-m
-  tmux send-keys -t "$SESSION:0.2" "'$VALIDATOR_LAUNCHER'" C-m
+    # Panes:
+    #   0 = Master (left, full height)
+    #   1 = Executor (middle-top)
+    #   2 = Validator (middle-bottom)
+    #   3 = Nvim (right-top)
+    #   4 = Terminal (right-bottom)
 
-  # Select the terminal pane
-  tmux select-pane -t "$SESSION:0.3"
+    sleep 1
+
+    tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
+    tmux send-keys -t "$SESSION:0.1" "'$EXECUTOR_LAUNCHER'" C-m
+    tmux send-keys -t "$SESSION:0.2" "'$VALIDATOR_LAUNCHER'" C-m
+    tmux send-keys -t "$SESSION:0.3" "nvim" C-m
+
+    # Select the terminal pane
+    tmux select-pane -t "$SESSION:0.4"
+
+  else
+    # Layout without --editor:
+    # +----------+----------+-----------+
+    # |          | EXECUTOR | VALIDATOR |
+    # |  MASTER  +----------+-----------+
+    # |          |       TERMINAL       |
+    # +----------+----------+-----------+
+
+    # Split right 2/3 for middle+right columns
+    tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
+
+    # Split that into middle and right columns
+    tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
+
+    # Split middle column vertically: Executor stays top, Terminal bottom
+    tmux split-window -v -t "$SESSION:0.1" -c "$DIR" -p 50
+
+    # Panes:
+    #   0 = Master (left, full height)
+    #   1 = Executor (middle-top)
+    #   2 = Validator (right-top — full height right column)
+    #   3 = Terminal (middle-bottom)
+    # But we want Terminal to span both middle and right bottom.
+    # tmux can't merge panes, so use a different split order:
+
+    # Actually, let's redo this. Start fresh:
+    tmux kill-session -t "$SESSION" 2>/dev/null || true
+    tmux new-session -d -s "$SESSION" -c "$DIR"
+
+    # Master on the left (1/3)
+    tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
+
+    # Split right side top/bottom
+    tmux split-window -v -t "$SESSION:0.1" -c "$DIR" -p 50
+
+    # Split top-right into Executor and Validator
+    tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
+
+    # Panes:
+    #   0 = Master (left, full height)
+    #   1 = Executor (top-middle)
+    #   2 = Validator (top-right)
+    #   3 = Terminal (bottom-right, full width of right side)
+
+    sleep 1
+
+    tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
+    tmux send-keys -t "$SESSION:0.1" "'$EXECUTOR_LAUNCHER'" C-m
+    tmux send-keys -t "$SESSION:0.2" "'$VALIDATOR_LAUNCHER'" C-m
+
+    # Select the terminal pane
+    tmux select-pane -t "$SESSION:0.3"
+  fi
 
 else
   # --- 2-pane layout: Master | Terminal ---
