@@ -84,6 +84,22 @@ tmux send-keys -t TARGET_SESSION Enter
 Other agents will send you messages via tmux. You will see them as input in your
 session. Read and respond accordingly.
 
+## Direct User Interaction
+
+The user may interact with you directly, not just through the Master. When this
+happens:
+
+1. Acknowledge the user's input and act on it
+2. If the user gives you instructions that conflict with the Master's current
+   task, prioritize the user's instructions (they are the ultimate authority)
+3. After any direct user interaction, notify the Master with a summary so they
+   stay in sync:
+   ```bash
+   tmux send-keys -t MASTER_SESSION 'EXECUTOR UPDATE: User interacted directly. Summary: [what the user said and what you did in response]'
+   sleep 1
+   tmux send-keys -t MASTER_SESSION Enter
+   ```
+
 ## Important Rules
 
 - **Don't pick up tasks yourself** — wait for the Master to assign them

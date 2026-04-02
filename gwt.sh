@@ -302,8 +302,20 @@ _gwt_rm() {
     local branch="${WT_BRANCH_PREFIX}/${name}"
     local session_name="${REPO_NAME}-${name}"
 
-    # Kill team agent sessions if they exist
-    "$AGENTIC_DIR/team-stop.sh" "$session_name" 2>/dev/null || true
+    # Kill team agent sessions
+    "$AGENTIC_DIR/team-stop.sh" "$session_name" "$gwt_path" || true
+
+    # Clean up .agent-comms artifacts that prevent worktree removal
+    if [[ -d "$gwt_path/.agent-comms" ]]; then
+      rm -rf "$gwt_path/.agent-comms"
+    fi
+    # Remove the .agent-comms/ line we appended to ignore files
+    if [[ -f "$gwt_path/.gitignore" ]]; then
+      sed -i '/^\.agent-comms\/$/d' "$gwt_path/.gitignore"
+    fi
+    if [[ -f "$gwt_path/.hgignore" ]]; then
+      sed -i '/^\.agent-comms\/$/d' "$gwt_path/.hgignore"
+    fi
 
     # Kill tmux session if it exists
     if tmux has-session -t "$session_name" 2>/dev/null; then

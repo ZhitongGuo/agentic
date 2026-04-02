@@ -102,24 +102,15 @@ fi
 EXECUTOR_SESSION="${SESSION}-executor"
 VALIDATOR_SESSION="${SESSION}-validator"
 
-# Get the Master prompt file (does not launch agents)
-MASTER_PROMPT_FILE="$("$AGENTIC_DIR/team-start.sh" "$SESSION" "$DIR" --master-prompt-file)"
-
-# Create a launcher script for the Master agent
-MASTER_LAUNCHER="$(mktemp "/tmp/agent-launcher-master-XXXXXX.sh")"
-cat > "$MASTER_LAUNCHER" <<LAUNCHER_EOF
-#!/bin/bash
-exec claude --dangerously-enable-internet-mode --dangerously-skip-permissions \\
-  --settings '${AGENTIC_DIR}/profiles/master.json' \\
-  --append-system-prompt "\$(cat '${MASTER_PROMPT_FILE}')"
-LAUNCHER_EOF
-chmod +x "$MASTER_LAUNCHER"
-
-# Start Executor and Validator in background tmux sessions
-"$AGENTIC_DIR/team-start.sh" "$SESSION" "$DIR"
-
 if [[ "$SHOW_ALL" == true ]]; then
   # --- 4-pane layout: Master | Executor | Validator | Terminal ---
+  # All agents run directly in panes (no background sessions, no nesting).
+
+  # Get launcher scripts for all 3 roles
+  mapfile -t LAUNCHERS < <("$AGENTIC_DIR/team-start.sh" "$SESSION" "$DIR" --launchers-only)
+  MASTER_LAUNCHER="${LAUNCHERS[0]}"
+  EXECUTOR_LAUNCHER="${LAUNCHERS[1]}"
+  VALIDATOR_LAUNCHER="${LAUNCHERS[2]}"
 
   # Create session with pane 0 (will be Master)
   tmux new-session -d -s "$SESSION" -c "$DIR"
@@ -132,30 +123,66 @@ if [[ "$SHOW_ALL" == true ]]; then
   # Even out the layout
   tmux select-layout -t "$SESSION" even-horizontal
 
+  # Show pane titles in borders (for regular tmux users)
+  tmux select-pane -t "$SESSION:0.0" -T "MASTER"
+  tmux select-pane -t "$SESSION:0.1" -T "EXECUTOR"
+  tmux select-pane -t "$SESSION:0.2" -T "VALIDATOR"
+  tmux select-pane -t "$SESSION:0.3" -T "TERMINAL"
+  tmux set-option -t "$SESSION" pane-border-status top
+  tmux set-option -t "$SESSION" pane-border-format " #{pane_title} "
+  tmux set-option -t "$SESSION" set-titles on
+
   sleep 1
 
-  # Pane 0: Master agent (via launcher script)
+  # Pane 0: Master agent
   tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
 
-  # Pane 1: Watch Executor session
-  tmux send-keys -t "$SESSION:0.1" "tmux attach-session -t '$EXECUTOR_SESSION'" C-m
+  # Pane 1: Executor agent (runs Claude directly, no nesting)
+  tmux send-keys -t "$SESSION:0.1" "'$EXECUTOR_LAUNCHER'" C-m
 
-  # Pane 2: Watch Validator session
-  tmux send-keys -t "$SESSION:0.2" "tmux attach-session -t '$VALIDATOR_SESSION'" C-m
+  # Pane 2: Validator agent (runs Claude directly, no nesting)
+  tmux send-keys -t "$SESSION:0.2" "'$VALIDATOR_LAUNCHER'" C-m
 
-  # Pane 3: Terminal (already a shell)
+  # Pane 3: Terminal — set title
+  tmux send-keys -t "$SESSION:0.3" "printf '\\033]2;TERMINAL\\007'" C-m
 
   # Select the terminal pane
   tmux select-pane -t "$SESSION:0.3"
 
 else
   # --- 2-pane layout: Master | Terminal ---
+  # Executor and Validator run in background tmux sessions.
+
+  # Get the Master prompt file (does not launch agents)
+  MASTER_PROMPT_FILE="$("$AGENTIC_DIR/team-start.sh" "$SESSION" "$DIR" --master-prompt-file)"
+
+  # Create a launcher script for the Master agent
+  MASTER_LAUNCHER="$(mktemp "/tmp/agent-launcher-master-XXXXXX.sh")"
+  cat > "$MASTER_LAUNCHER" <<LAUNCHER_EOF
+#!/bin/bash
+printf '\\033]2;MASTER\\007'
+exec claude --dangerously-enable-internet-mode --dangerously-skip-permissions \\
+  --settings '${AGENTIC_DIR}/profiles/master.json' \\
+  --append-system-prompt "\$(cat '${MASTER_PROMPT_FILE}')"
+LAUNCHER_EOF
+  chmod +x "$MASTER_LAUNCHER"
+
+  # Start Executor and Validator in background tmux sessions
+  "$AGENTIC_DIR/team-start.sh" "$SESSION" "$DIR"
 
   # Create session with pane 0 (will be Master)
   tmux new-session -d -s "$SESSION" -c "$DIR"
 
   # Split vertically (left/right)
   tmux split-window -h -t "$SESSION" -c "$DIR"
+
+  # Label panes
+  tmux select-pane -t "$SESSION:0.0" -T "MASTER"
+  tmux select-pane -t "$SESSION:0.1" -T "TERMINAL"
+
+  # Show pane titles in the border
+  tmux set-option -t "$SESSION" pane-border-status top
+  tmux set-option -t "$SESSION" pane-border-format " #{pane_title} "
 
   sleep 1
 

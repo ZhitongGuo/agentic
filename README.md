@@ -57,7 +57,7 @@ tinit --session work --team --show-all  # team with all agents visible
 | `--team` | `[Master] [Terminal]` — Executor/Validator in background sessions |
 | `--team --show-all` | `[Master] [Executor] [Validator] [Terminal]` |
 
-Attaches with `tmux -CC` (iTerm2 control mode).
+Attaches with `tmux -CC` (iTerm2 control mode). Each pane is labeled with its role in the terminal/tab title.
 
 ### `gwt` — Git Worktree Manager
 
@@ -100,28 +100,102 @@ Tab completion is available via `gwt-completion.bash` (auto-sourced).
 
 ### Agent Teams
 
-When `--team` is passed to `gwt add` or `tinit`, three coordinated Claude agents are launched:
+When `--team` is passed to `gwt add` or `tinit`, three coordinated Claude agents are launched to work together on complex tasks:
 
 ```
 User ◄──► Master ──► Executor ──► Validator
-              ◄── escalation ◄── feedback ──┘
+           │  ◄── escalation ◄── feedback ──┘
+           │
+           └──► User can also talk directly to Executor/Validator
+                (they will update Master to keep it in sync)
 ```
 
 | Role | Responsibilities |
 |------|-----------------|
-| **Master** | User-facing. Breaks down the project into tasks, creates execution and validation plans, delegates all work to Executor. Never writes code. |
-| **Executor** | Implements tasks from Master. Notifies Validator on completion. Retries up to 5 times on validation failure before escalating to Master. |
-| **Validator** | Validates Executor's work against the validation plan. Always includes a thorough code review. Reports pass/fail to Executor. |
+| **Master** | User-facing. Collaborates with the user to brainstorm, plan, and break down the project into tasks. Creates execution plans and validation plans. Delegates all implementation to the Executor — never writes code itself. Handles escalations when the Executor is blocked or fails validation repeatedly. |
+| **Executor** | Receives tasks from Master and implements them. Asks Master for clarification when specs are ambiguous. On completion, notifies the Validator. If validation fails, retries up to 5 times before escalating to Master for help or human intervention. |
+| **Validator** | Receives validation specs from Master. When Executor signals task completion, validates the work against the plan. Always performs a mandatory code review (correctness, syntax, quality, security, edge cases) even if not in the validation plan. Reports pass/fail with detailed feedback to Executor. |
 
-**Communication:** Agents use a hybrid approach — tmux `send-keys`/`capture-pane` for short signals and status messages, and file-based messaging via `.agent-comms/` in the worktree for detailed task specs, validation plans, and review feedback.
+#### Example: Building a REST API
+
+```bash
+# 1. Create a worktree with a team for a complex feature
+gwt add rest-api --team
+
+# 2. You now have a Master agent (left) and terminal (right).
+#    Tell the Master what you want:
+#
+#    > "I want to build a REST API for user management with CRUD endpoints,
+#      authentication, and input validation. Use Express and PostgreSQL."
+#
+# 3. Master will:
+#    - Brainstorm the architecture with you
+#    - Break it into tasks (e.g., "set up Express server", "add user model",
+#      "implement POST /users", "add JWT auth", etc.)
+#    - Create a validation plan for each task
+#    - Delegate tasks one at a time to the Executor
+#
+# 4. For each task, the flow is automatic:
+#    Master writes task spec → Executor implements → Validator reviews
+#    If validation fails, Executor retries. After 5 failures, Master steps in.
+#
+# 5. Master reports back to you after each validated task.
+
+# To see all agents working in real-time:
+gwt add rest-api --team --show-all
+
+# Clean up when done (kills all agent sessions + worktree)
+gwt rm rest-api
+```
+
+#### Example: Quick Bug Fix with Full Visibility
+
+```bash
+# Show all agents side by side
+gwt add bugfix --team --show-all
+
+# You'll see 4 labeled panes:
+#   [MASTER] [EXECUTOR] [VALIDATOR] [TERMINAL]
+#
+# Tell Master: "Fix the null pointer exception in UserService.getUser()
+# when the user ID doesn't exist in the database."
+#
+# You can also talk directly to Executor or Validator — they'll notify
+# Master to stay in sync.
+```
+
+#### Example: Multiple Parallel Teams
+
+```bash
+# Spin up multiple worktrees with teams for parallel development
+gwt add frontend backend database --team
+
+# Each worktree gets its own independent team of 3 agents.
+# The last one attaches; the others run in background sessions.
+#
+# Connect to any team's tmux session:
+#   tmux -CC attach -t myrepo-frontend
+#   tmux -CC attach -t myrepo-backend
+```
+
+#### Communication
+
+Agents use a hybrid approach:
+
+- **tmux signals**: Short status messages (`TASK COMPLETE`, `VALIDATION PASSED`, `BLOCKED`, etc.) sent via `tmux send-keys`
+- **File-based specs**: Detailed task specs, validation plans, and review feedback written to `.agent-comms/` in the worktree
 
 | File | Direction | Purpose |
 |------|-----------|---------|
-| `.agent-comms/task-{N}.md` | Master → Executor | Task specification |
-| `.agent-comms/validation-plan-{N}.md` | Master → Validator | Validation criteria |
-| `.agent-comms/validation-result-{N}.md` | Validator → Executor | Pass/fail feedback |
+| `.agent-comms/task-{N}.md` | Master → Executor | Task specification with acceptance criteria |
+| `.agent-comms/validation-plan-{N}.md` | Master → Validator | What to verify (tests, behavior, edge cases) |
+| `.agent-comms/validation-result-{N}.md` | Validator → Executor | Pass/fail with detailed feedback |
 
-The `.agent-comms/` directory is automatically created and added to `.gitignore` (or `.hgignore` for Sapling repos).
+The `.agent-comms/` directory is automatically created and added to `.gitignore` (or `.hgignore` for Sapling repos). It is cleaned up when you run `gwt rm`.
+
+#### Direct User Interaction
+
+You can talk directly to any agent, not just the Master. If you interact with the Executor or Validator directly (e.g., to give them additional context or override instructions), they will automatically notify the Master with a summary so it stays in sync.
 
 ### `master-claude` — Legacy Multi-Agent Orchestration
 

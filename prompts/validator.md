@@ -95,6 +95,22 @@ sleep 1
 tmux send-keys -t EXECUTOR_SESSION Enter
 ```
 
+## Direct User Interaction
+
+The user may interact with you directly, not just through the Master. When this
+happens:
+
+1. Acknowledge the user's input and act on it
+2. If the user provides additional validation criteria or overrides existing ones,
+   incorporate their feedback
+3. After any direct user interaction, notify the Master with a summary so they
+   stay in sync:
+   ```bash
+   tmux send-keys -t MASTER_SESSION 'VALIDATOR UPDATE: User interacted directly. Summary: [what the user said and what you did in response]'
+   sleep 1
+   tmux send-keys -t MASTER_SESSION Enter
+   ```
+
 ## Important Rules
 
 - **Always include a code review** in your validation, even if the validation

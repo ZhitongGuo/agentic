@@ -108,8 +108,12 @@ write_launcher() {
   local prompt_file="$2"
   local launcher
   launcher="$(mktemp "/tmp/agent-launcher-${role}-XXXXXX.sh")"
+  local label
+  label="$(echo "$role" | tr '[:lower:]' '[:upper:]')"
   cat > "$launcher" <<LAUNCHER_EOF
 #!/bin/bash
+# Set terminal/pane title (visible in iTerm2 -CC mode and regular tmux)
+printf '\\033]2;${label}\\007'
 exec claude --dangerously-enable-internet-mode --dangerously-skip-permissions \\
   --settings '${SCRIPT_DIR}/profiles/${role}.json' \\
   --append-system-prompt "\$(cat '${prompt_file}')"
@@ -144,19 +148,40 @@ launch_agent() {
 
 # --- Main ---
 
-# If asked, only write the master prompt file and print its path
-if [[ "${3:-}" == "--master-prompt-file" ]]; then
-  write_prompt_file "master"
-  exit 0
-fi
+MODE="${3:-}"
 
-# Launch Executor and Validator in background sessions
-echo "Starting Executor agent (session: $EXECUTOR_SESSION)..."
-launch_agent "executor" "$EXECUTOR_SESSION"
+case "$MODE" in
+  --master-prompt-file)
+    # Only write the master prompt file and print its path
+    write_prompt_file "master"
+    exit 0
+    ;;
 
-echo "Starting Validator agent (session: $VALIDATOR_SESSION)..."
-launch_agent "validator" "$VALIDATOR_SESSION"
+  --launchers-only)
+    # Write launcher scripts for all 3 roles and print their paths (one per line).
+    # Does NOT create any tmux sessions. Used by tinit --show-all.
+    for role in master executor validator; do
+      prompt_file="$(write_prompt_file "$role")"
+      write_launcher "$role" "$prompt_file"
+    done
+    exit 0
+    ;;
 
-echo "Team agents started."
-echo "  Executor: $EXECUTOR_SESSION"
-echo "  Validator: $VALIDATOR_SESSION"
+  "")
+    # Default: launch Executor and Validator in background tmux sessions
+    echo "Starting Executor agent (session: $EXECUTOR_SESSION)..."
+    launch_agent "executor" "$EXECUTOR_SESSION"
+
+    echo "Starting Validator agent (session: $VALIDATOR_SESSION)..."
+    launch_agent "validator" "$VALIDATOR_SESSION"
+
+    echo "Team agents started."
+    echo "  Executor: $EXECUTOR_SESSION"
+    echo "  Validator: $VALIDATOR_SESSION"
+    ;;
+
+  *)
+    echo "team-start.sh: unknown flag '$MODE'" >&2
+    exit 1
+    ;;
+esac
