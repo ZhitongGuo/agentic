@@ -153,6 +153,11 @@ else
   MASTER_LAUNCHER="$(mktemp "/tmp/agent-launcher-master-XXXXXX.sh")"
   cat > "$MASTER_LAUNCHER" <<LAUNCHER_EOF
 #!/bin/bash
+echo ""
+echo "╔══════════════════════════╗"
+echo "║  MASTER                  ║"
+echo "╚══════════════════════════╝"
+echo ""
 exec claude --dangerously-enable-internet-mode --dangerously-skip-permissions \\
   --settings '${AGENTIC_DIR}/profiles/master.json' \\
   --append-system-prompt "\$(cat '${MASTER_PROMPT_FILE}')"

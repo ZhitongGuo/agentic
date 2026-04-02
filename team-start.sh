@@ -112,6 +112,11 @@ write_launcher() {
   label="$(echo "$role" | tr '[:lower:]' '[:upper:]')"
   cat > "$launcher" <<LAUNCHER_EOF
 #!/bin/bash
+echo ""
+echo "╔══════════════════════════╗"
+echo "║  ${label}$(printf '%*s' $((18 - ${#label})) '')║"
+echo "╚══════════════════════════╝"
+echo ""
 exec claude --dangerously-enable-internet-mode --dangerously-skip-permissions \\
   --settings '${SCRIPT_DIR}/profiles/${role}.json' \\
   --append-system-prompt "\$(cat '${prompt_file}')"
