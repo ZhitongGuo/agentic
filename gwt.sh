@@ -3,7 +3,7 @@
 # Source this file in .bashrc: source ~/agentic/gwt.sh
 #
 # Usage:
-#   gwt add <name> [name2 ...] [--no-cd] [--tmux] [--team [--show-all]]
+#   gwt add <name> [name2 ...] [--no-tmux] [--no-cd] [--team [--show-all]]
 #   gwt ls
 #   gwt rm <pattern> [pattern2 ...] [--force]
 
@@ -30,14 +30,14 @@ gwt() {
 _gwt_usage() {
   cat <<'EOF'
 Usage:
-  gwt add <name> [name2 ...] [--no-cd] [--tmux] [--prefix PREFIX] [--branch BRANCH]
-                             [--team [--show-all]]
+  gwt add <name> [name2 ...] [--no-tmux] [--no-cd] [--team [--show-all]]
+                             [--prefix PREFIX] [--branch BRANCH]
   gwt ls                                           List worktrees
   gwt rm <pattern> [pattern2 ...] [--force]        Remove worktree(s)
 
 Options:
   --no-cd        (add) Don't cd into the worktree (single worktree only)
-  --tmux         (add) Create tmux session(s) via tinit
+  --no-tmux      (add) Don't create a tmux session (just create the worktree)
   --team         (add) Start a 3-agent team (Master, Executor, Validator)
   --show-all     (add) Show all agent panes (requires --team)
   --prefix PFX   (add) Override branch prefix (default: $WT_BRANCH_PREFIX)
@@ -60,7 +60,7 @@ _gwt_repo_info() {
 _gwt_add() {
   local names=()
   local no_cd=false
-  local use_tmux=false
+  local use_tmux=true
   local use_team=false
   local show_all=false
   local prefix="$WT_BRANCH_PREFIX"
@@ -69,6 +69,7 @@ _gwt_add() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --no-cd)     no_cd=true; shift ;;
+      --no-tmux)   use_tmux=false; shift ;;
       -t|--tmux)   use_tmux=true; shift ;;
       --team)      use_team=true; use_tmux=true; shift ;;
       --show-all)  show_all=true; shift ;;

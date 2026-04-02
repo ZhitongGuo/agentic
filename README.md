@@ -64,8 +64,9 @@ Attaches with `tmux -CC` (iTerm2 control mode). Each pane is labeled with its ro
 Creates and manages git worktrees for parallel agent workflows. Worktrees are created at `<repo-parent>/<repo>-<name>` with branch `<prefix>/<name>`.
 
 ```bash
-gwt add task1                      # create worktree, cd into it
-gwt add task1 task2 task3 --tmux   # create 3 worktrees with tmux sessions
+gwt add task1                      # create worktree + tmux session (default)
+gwt add task1 --no-tmux            # create worktree only, no tmux
+gwt add task1 task2 task3          # create 3 worktrees with tmux sessions
 gwt add task1 --team               # create worktree with 3-agent team
 gwt add task1 --team --show-all    # team with all agents visible
 gwt ls                             # list worktrees
@@ -83,8 +84,8 @@ gwt rm 'task*' --force             # glob remove, force delete
 
 | Flag | Description |
 |------|-------------|
-| `--tmux` / `-t` | Create tmux session(s) via `tinit` |
-| `--team` | Start a 3-agent team (implies `--tmux`) |
+| `--no-tmux` | Don't create a tmux session (just create the worktree) |
+| `--team` | Start a 3-agent team (Master, Executor, Validator) |
 | `--show-all` | Show all agent panes (requires `--team`) |
 | `--no-cd` | Don't cd into the worktree |
 | `--prefix PFX` | Override branch prefix (default: `$WT_BRANCH_PREFIX`) |
