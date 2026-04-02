@@ -134,17 +134,13 @@ if [[ "$SHOW_ALL" == true ]]; then
 
   sleep 1
 
-  # Pane 0: Master agent
-  tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
-
-  # Pane 1: Executor agent (runs Claude directly, no nesting)
-  tmux send-keys -t "$SESSION:0.1" "'$EXECUTOR_LAUNCHER'" C-m
-
-  # Pane 2: Validator agent (runs Claude directly, no nesting)
-  tmux send-keys -t "$SESSION:0.2" "'$VALIDATOR_LAUNCHER'" C-m
-
-  # Pane 3: Terminal — set title
-  tmux send-keys -t "$SESSION:0.3" "printf '\\033]2;TERMINAL\\007'" C-m
+  # Set pane titles and launch agents.
+  # Each pane: echo a visible banner, set terminal title, then launch.
+  # The banner stays visible at the top of the pane scrollback.
+  tmux send-keys -t "$SESSION:0.0" "echo '=== MASTER ===' && '$MASTER_LAUNCHER'" C-m
+  tmux send-keys -t "$SESSION:0.1" "echo '=== EXECUTOR ===' && '$EXECUTOR_LAUNCHER'" C-m
+  tmux send-keys -t "$SESSION:0.2" "echo '=== VALIDATOR ===' && '$VALIDATOR_LAUNCHER'" C-m
+  tmux send-keys -t "$SESSION:0.3" "echo '=== TERMINAL ==='" C-m
 
   # Select the terminal pane
   tmux select-pane -t "$SESSION:0.3"
@@ -187,7 +183,10 @@ LAUNCHER_EOF
   sleep 1
 
   # Pane 0: Master agent (via launcher script)
-  tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
+  tmux send-keys -t "$SESSION:0.0" "echo '=== MASTER ===' && '$MASTER_LAUNCHER'" C-m
+
+  # Pane 1: Terminal banner
+  tmux send-keys -t "$SESSION:0.1" "echo '=== TERMINAL ==='" C-m
 
   # Select the right pane (terminal)
   tmux select-pane -t "$SESSION:0.1"
