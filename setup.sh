@@ -27,12 +27,6 @@ fi
 SHELL_RC="$HOME/.bashrc"
 [[ "$(basename "$SHELL")" == "zsh" ]] && SHELL_RC="$HOME/.zshrc"
 
-# Remove old gwt.sh references if present
-if grep -qF "gwt.sh" "$SHELL_RC" 2>/dev/null; then
-  sed -i '/gwt\.sh/d' "$SHELL_RC"
-  echo "Removed old gwt.sh reference from $(basename "$SHELL_RC")"
-fi
-
 # Source ag.sh if not already sourced
 if ! grep -qF "source $AGENTIC_DIR/ag.sh" "$SHELL_RC" 2>/dev/null && \
    ! grep -qF "source ~/agentic/ag.sh" "$SHELL_RC" 2>/dev/null; then
