@@ -137,10 +137,10 @@ if [[ "$SHOW_ALL" == true ]]; then
   # Set pane titles and launch agents.
   # Each pane: echo a visible banner, set terminal title, then launch.
   # The banner stays visible at the top of the pane scrollback.
-  tmux send-keys -t "$SESSION:0.0" "echo '=== MASTER ===' && '$MASTER_LAUNCHER'" C-m
-  tmux send-keys -t "$SESSION:0.1" "echo '=== EXECUTOR ===' && '$EXECUTOR_LAUNCHER'" C-m
-  tmux send-keys -t "$SESSION:0.2" "echo '=== VALIDATOR ===' && '$VALIDATOR_LAUNCHER'" C-m
-  tmux send-keys -t "$SESSION:0.3" "echo '=== TERMINAL ==='" C-m
+  tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
+  tmux send-keys -t "$SESSION:0.1" "'$EXECUTOR_LAUNCHER'" C-m
+  tmux send-keys -t "$SESSION:0.2" "'$VALIDATOR_LAUNCHER'" C-m
+  tmux send-keys -t "$SESSION:0.3" "printf '\\033]1;TERMINAL\\007' && printf '\\033]2;TERMINAL\\007'" C-m
 
   # Select the terminal pane
   tmux select-pane -t "$SESSION:0.3"
@@ -156,6 +156,7 @@ else
   MASTER_LAUNCHER="$(mktemp "/tmp/agent-launcher-master-XXXXXX.sh")"
   cat > "$MASTER_LAUNCHER" <<LAUNCHER_EOF
 #!/bin/bash
+printf '\\033]1;MASTER\\007'
 printf '\\033]2;MASTER\\007'
 exec claude --dangerously-enable-internet-mode --dangerously-skip-permissions \\
   --settings '${AGENTIC_DIR}/profiles/master.json' \\
@@ -183,10 +184,10 @@ LAUNCHER_EOF
   sleep 1
 
   # Pane 0: Master agent (via launcher script)
-  tmux send-keys -t "$SESSION:0.0" "echo '=== MASTER ===' && '$MASTER_LAUNCHER'" C-m
+  tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
 
-  # Pane 1: Terminal banner
-  tmux send-keys -t "$SESSION:0.1" "echo '=== TERMINAL ==='" C-m
+  # Pane 1: Terminal title
+  tmux send-keys -t "$SESSION:0.1" "printf '\\033]1;TERMINAL\\007' && printf '\\033]2;TERMINAL\\007'" C-m
 
   # Select the right pane (terminal)
   tmux select-pane -t "$SESSION:0.1"

@@ -112,7 +112,8 @@ write_launcher() {
   label="$(echo "$role" | tr '[:lower:]' '[:upper:]')"
   cat > "$launcher" <<LAUNCHER_EOF
 #!/bin/bash
-# Set terminal/pane title (visible in iTerm2 -CC mode and regular tmux)
+# Set iTerm2 pane title bar and terminal title
+printf '\\033]1;${label}\\007'
 printf '\\033]2;${label}\\007'
 exec claude --dangerously-enable-internet-mode --dangerously-skip-permissions \\
   --settings '${SCRIPT_DIR}/profiles/${role}.json' \\
