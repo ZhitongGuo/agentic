@@ -39,7 +39,10 @@ tmux new-session -d -s "$SESSION" -c "$DIR"
 # Split vertically (left/right)
 tmux split-window -h -t "$SESSION" -c "$DIR"
 
-# Send "cl" to the left pane (pane 0)
+# Wait for shell to initialize before sending command
+sleep 1
+
+# Send claude command to the left pane (pane 0)
 tmux send-keys -t "$SESSION:0.0" 'claude --dangerously-enable-internet-mode --dangerously-skip-permissions' C-m
 
 # Select the right pane
