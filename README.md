@@ -223,6 +223,16 @@ agentic/
     └── validator.json
 ```
 
+## Testing
+
+Tests use [bats-core](https://github.com/bats-core/bats-core) (installed automatically on first run).
+
+```bash
+./tests/run.sh              # run all tests
+./tests/run.sh unit         # unit tests only (argument parsing, validation)
+./tests/run.sh integration  # integration tests (worktree lifecycle, tmux, team agents)
+```
+
 ## Aliases (optional)
 
 Pass `--aliases` to `setup.sh` to add these to your shell RC (skipped if the command is already aliased):
