@@ -181,25 +181,23 @@ if [[ "$SHOW_ALL" == true ]]; then
   else
     # Layout without --editor:
     # +----------+----------+-----------+
-    # |          | EXECUTOR | VALIDATOR |
-    # |  MASTER  +----------+-----------+
-    # |          |       TERMINAL       |
+    # |          |          | VALIDATOR |
+    # |  MASTER  | EXECUTOR +-----------+
+    # |          |          | TERMINAL  |
     # +----------+----------+-----------+
 
-    # Master on the left (1/3)
+    # Split into 3 columns
     tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
-
-    # Split right side top/bottom
-    tmux split-window -v -t "$SESSION:0.1" -c "$DIR" -p 50
-
-    # Split top-right into Executor and Validator
     tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
+
+    # Split right column: Validator (top) / Terminal (bottom)
+    tmux split-window -v -t "$SESSION:0.2" -c "$DIR" -p 50
 
     # Panes:
     #   0 = Master (left, full height)
-    #   1 = Executor (top-middle)
+    #   1 = Executor (middle, full height)
     #   2 = Validator (top-right)
-    #   3 = Terminal (bottom, full width of right side)
+    #   3 = Terminal (bottom-right)
 
     sleep 1
 
