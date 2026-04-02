@@ -11,7 +11,8 @@ git clone git@github.com:Chef-SWanger/agentic.git ~/agentic
 Then run:
 
 ```bash
-~/agentic/setup.sh
+~/agentic/setup.sh              # core setup only
+~/agentic/setup.sh --aliases    # also add shell aliases
 ```
 
 Or manually:
@@ -108,6 +109,20 @@ agentic/
     ├── prompts/                  # System prompts per agent role
     └── utils/                    # Bootstrap and launch scripts
 ```
+
+## Aliases (optional)
+
+Pass `--aliases` to `setup.sh` to add these to your shell RC (skipped if the command is already aliased):
+
+| Alias | Command |
+|-------|---------|
+| `cl` | `claude --dangerously-enable-internet-mode --dangerously-skip-permissions` |
+| `cx` | `codex --dangerously-enable-internet-mode --sandbox danger-full-access --ask-for-approval never` |
+| `mc` | `master-claude` |
+| `t` | `tmux` |
+| `ts` | `tmux -CC new -A -s` |
+| `tk` | `tmux kill-session -t` |
+| `v` | `nvim` |
 
 ## Configuration
 

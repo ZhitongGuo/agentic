@@ -1,6 +1,6 @@
 #!/bin/bash
 # One-command setup for agentic tooling.
-# Usage: ~/agentic/setup.sh
+# Usage: ~/agentic/setup.sh [--aliases]
 
 set -e
 
@@ -28,6 +28,30 @@ if ! grep -qF "source $AGENTIC_DIR/gwt.sh" "$SHELL_RC" 2>/dev/null && \
    ! grep -qF "source ~/agentic/gwt.sh" "$SHELL_RC" 2>/dev/null; then
   echo "source $AGENTIC_DIR/gwt.sh" >> "$SHELL_RC"
   echo "Added gwt.sh to $(basename "$SHELL_RC")"
+fi
+
+# Optionally add aliases (--aliases flag)
+if [[ " $* " == *" --aliases "* ]]; then
+ALIASES=(
+  'alias cl="claude --dangerously-enable-internet-mode --dangerously-skip-permissions"'
+  'alias cx="codex --dangerously-enable-internet-mode --sandbox danger-full-access --ask-for-approval never"'
+  'alias mc="master-claude"'
+  'alias t="tmux"'
+  'alias ts="tmux -CC new -A -s"'
+  'alias tk="tmux kill-session -t"'
+  'alias v="nvim"'
+)
+
+for alias_line in "${ALIASES[@]}"; do
+  alias_name="$(echo "$alias_line" | sed 's/alias \([^=]*\)=.*/\1/')"
+  alias_cmd="$(echo "$alias_line" | sed 's/alias [^=]*="\([^"]*\)".*/\1/' | awk '{print $1}')"
+  if ! grep -qE "alias [^=]+=['\"]${alias_cmd}( |\"|')" "$SHELL_RC" 2>/dev/null; then
+    echo "$alias_line" >> "$SHELL_RC"
+    echo "Added alias: $alias_name"
+  else
+    echo "Skipped alias $alias_name: $alias_cmd is already aliased"
+  fi
+done
 fi
 
 echo "Setup complete. Available commands: tinit, gwt, master-claude"
