@@ -11,7 +11,9 @@ mkdir -p "$BIN_DIR"
 
 # Symlink CLI commands
 ln -sf "$AGENTIC_DIR/tinit.sh" "$BIN_DIR/tinit"
-# ln -sf "$AGENTIC_DIR/master-claude/master-claude.sh" "$BIN_DIR/master-claude"
+
+# Clean up stale master-claude symlink if it exists
+rm -f "$BIN_DIR/master-claude"
 
 # Add ~/bin to PATH if not already there
 if ! echo "$PATH" | tr ':' '\n' | grep -qx "$BIN_DIR"; then
@@ -21,9 +23,17 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$BIN_DIR"; then
   echo "Added ~/bin to PATH in $(basename "$SHELL_RC")"
 fi
 
-# Source ag.sh if not already sourced
+# Determine shell RC file
 SHELL_RC="$HOME/.bashrc"
 [[ "$(basename "$SHELL")" == "zsh" ]] && SHELL_RC="$HOME/.zshrc"
+
+# Remove old gwt.sh references if present
+if grep -qF "gwt.sh" "$SHELL_RC" 2>/dev/null; then
+  sed -i '/gwt\.sh/d' "$SHELL_RC"
+  echo "Removed old gwt.sh reference from $(basename "$SHELL_RC")"
+fi
+
+# Source ag.sh if not already sourced
 if ! grep -qF "source $AGENTIC_DIR/ag.sh" "$SHELL_RC" 2>/dev/null && \
    ! grep -qF "source ~/agentic/ag.sh" "$SHELL_RC" 2>/dev/null; then
   echo "source $AGENTIC_DIR/ag.sh" >> "$SHELL_RC"
@@ -35,7 +45,6 @@ if [[ " $* " == *" --aliases "* ]]; then
 ALIASES=(
   'alias cl="claude --dangerously-enable-internet-mode --dangerously-skip-permissions"'
   'alias cx="codex --dangerously-enable-internet-mode --sandbox danger-full-access --ask-for-approval never"'
-  'alias mc="master-claude"'
   'alias t="tmux"'
   'alias ts="tmux -CC new -A -s"'
   'alias tk="tmux kill-session -t"'
