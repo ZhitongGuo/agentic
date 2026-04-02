@@ -40,7 +40,7 @@ Options:
   --no-tmux      (add) Don't create a tmux session (just create the worktree)
   --team         (add) Start a 3-agent team (Master, Executor, Validator)
   --show-all     (add) Show all agent panes (requires --team)
-  --editor       (add) Include an nvim pane (requires --show-all)
+  --editor       (add) Include an nvim pane
   --prefix PFX   (add) Override branch prefix (default: $WT_BRANCH_PREFIX)
   --branch NAME  (add) Use exact branch name (single worktree only)
   --force        (rm)  Force remove even with uncommitted changes
@@ -88,10 +88,6 @@ _ag_add() {
     return 1
   fi
 
-  if [[ "$editor_pane" == true && "$show_all" == false ]]; then
-    echo "ag add: --editor requires --show-all"
-    return 1
-  fi
 
   if [[ ${#names[@]} -eq 0 ]]; then
     echo "ag add: at least one name is required"
@@ -154,9 +150,9 @@ _ag_add() {
         if [[ "$show_all" == true ]]; then
           tinit_args+=(--show-all)
         fi
-        if [[ "$editor_pane" == true ]]; then
-          tinit_args+=(--editor)
-        fi
+      fi
+      if [[ "$editor_pane" == true ]]; then
+        tinit_args+=(--editor)
       fi
       "$AGENTIC_DIR/tinit.sh" "${tinit_args[@]}"
     elif [[ "$no_cd" == false ]]; then
@@ -180,9 +176,9 @@ _ag_add() {
         if [[ "$show_all" == true ]]; then
           tinit_args+=(--show-all)
         fi
-        if [[ "$editor_pane" == true ]]; then
-          tinit_args+=(--editor)
-        fi
+      fi
+      if [[ "$editor_pane" == true ]]; then
+        tinit_args+=(--editor)
       fi
 
       if [[ $i -eq $last_idx ]]; then

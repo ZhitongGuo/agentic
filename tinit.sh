@@ -31,12 +31,14 @@ Options:
   --no-attach      Create session without attaching (for batch creation)
   --team           Start a 3-agent team (Master, Executor, Validator)
   --show-all       Show all agent panes side by side (requires --team)
-  --editor         Include an nvim pane (requires --show-all)
+  --editor         Include an nvim pane
   --help, -h       Show this help message
 
 Layouts:
   Default:           [Claude] [Terminal]
+  --editor:          [Claude] [Nvim] [Terminal]
   --team:            [Master] [Terminal]  (Executor/Validator in background)
+  --team --editor:   [Master] [Nvim] [Terminal]
   --team --show-all:
     +----------+----------+-----------+
     |          | EXECUTOR | VALIDATOR |
@@ -82,10 +84,6 @@ if [[ "$SHOW_ALL" == true && "$TEAM_MODE" == false ]]; then
   exit 1
 fi
 
-if [[ "$EDITOR_PANE" == true && "$SHOW_ALL" == false ]]; then
-  echo "tinit: --editor requires --show-all" >&2
-  exit 1
-fi
 
 # Kill existing session if it exists
 tmux kill-session -t "$SESSION" 2>/dev/null || true
@@ -94,20 +92,28 @@ tmux kill-session -t "$SESSION" 2>/dev/null || true
 # Simple mode (no --team): Claude + terminal
 # ---------------------------------------------------------------------------
 if [[ "$TEAM_MODE" == false ]]; then
-  # Create new session, left pane
   tmux new-session -d -s "$SESSION" -c "$DIR"
 
-  # Split vertically (left/right)
-  tmux split-window -h -t "$SESSION" -c "$DIR"
+  if [[ "$EDITOR_PANE" == true ]]; then
+    # Layout: [Claude] [Nvim] [Terminal]
+    #         left      mid    right
+    tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
+    tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
 
-  # Wait for shell to initialize before sending command
-  sleep 1
+    sleep 1
 
-  # Send claude command to the left pane (pane 0)
-  tmux send-keys -t "$SESSION:0.0" 'claude --dangerously-enable-internet-mode --dangerously-skip-permissions' C-m
+    tmux send-keys -t "$SESSION:0.0" 'claude --dangerously-enable-internet-mode --dangerously-skip-permissions' C-m
+    tmux send-keys -t "$SESSION:0.1" "nvim" C-m
+    tmux select-pane -t "$SESSION:0.2"
+  else
+    # Layout: [Claude] [Terminal]
+    tmux split-window -h -t "$SESSION" -c "$DIR"
 
-  # Select the right pane
-  tmux select-pane -t "$SESSION:0.1"
+    sleep 1
+
+    tmux send-keys -t "$SESSION:0.0" 'claude --dangerously-enable-internet-mode --dangerously-skip-permissions' C-m
+    tmux select-pane -t "$SESSION:0.1"
+  fi
 
   if [[ "$NO_ATTACH" == false ]]; then
     tmux -CC attach-session -t "$SESSION"
@@ -254,16 +260,25 @@ LAUNCHER_EOF
   # Create session with pane 0 (will be Master)
   tmux new-session -d -s "$SESSION" -c "$DIR"
 
-  # Split vertically (left/right)
-  tmux split-window -h -t "$SESSION" -c "$DIR"
+  if [[ "$EDITOR_PANE" == true ]]; then
+    # Layout: [Master] [Nvim] [Terminal]
+    tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
+    tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
 
-  sleep 1
+    sleep 1
 
-  # Pane 0: Master agent (via launcher script)
-  tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
+    tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
+    tmux send-keys -t "$SESSION:0.1" "nvim" C-m
+    tmux select-pane -t "$SESSION:0.2"
+  else
+    # Layout: [Master] [Terminal]
+    tmux split-window -h -t "$SESSION" -c "$DIR"
 
-  # Select the right pane (terminal)
-  tmux select-pane -t "$SESSION:0.1"
+    sleep 1
+
+    tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
+    tmux select-pane -t "$SESSION:0.1"
+  fi
 fi
 
 if [[ "$NO_ATTACH" == false ]]; then
