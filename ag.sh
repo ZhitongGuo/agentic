@@ -389,36 +389,77 @@ _ag_rm() {
     return 1
   fi
 
-  # Try to get repo info from current directory. If that fails, try to
-  # discover the repo from the worktree name by finding a matching directory.
-  if ! _ag_repo_info 2>/dev/null; then
-    _ag_rm_anywhere "$force" "${patterns[@]}"
-    return $?
+  _ag_repo_info 2>/dev/null
+  local repo_name="${REPO_NAME:-}"
+
+  # Build list of known worktrees from two sources:
+  # 1. git worktree list (if inside a repo)
+  # 2. ag-tagged tmux sessions (works from anywhere)
+  local all_entries=()  # each: "name|wt_path|branch|session_name"
+
+  # Source 1: git worktree list
+  if [[ -n "$repo_name" ]]; then
+    local prefix="${REPO_PARENT}/${REPO_NAME}-"
+    while IFS= read -r line; do
+      local wt_path
+      wt_path="$(echo "$line" | awk '{print $1}')"
+      if [[ "$wt_path" == ${prefix}* && "$wt_path" != "$REPO_ROOT" ]]; then
+        local suffix="${wt_path#${prefix}}"
+        all_entries+=("${suffix}|${wt_path}|${WT_BRANCH_PREFIX}/${suffix}|${REPO_NAME}-${suffix}")
+      fi
+    done < <(git worktree list 2>/dev/null)
   fi
 
-  # --- Inside a git repo: use standard worktree list approach ---
+  # Source 2: ag-tagged tmux sessions (catches worktrees from other repos)
+  local sessions
+  sessions="$(tmux list-sessions -F '#{session_name}|#{session_path}' 2>/dev/null || true)"
+  while IFS='|' read -r sess sess_path; do
+    [[ -z "$sess" ]] && continue
+    # Skip executor/validator sessions
+    [[ "$sess" == *"-executor" || "$sess" == *"-validator" ]] && continue
+    # Only ag-tagged sessions
+    local ag_tag
+    ag_tag="$(tmux show-environment -t "$sess" AG_SESSION 2>/dev/null | cut -d= -f2-)"
+    local ag_team
+    ag_team="$(tmux show-environment -t "$sess" AG_TEAM_MODE 2>/dev/null | cut -d= -f2-)"
+    [[ -z "$ag_tag" && -z "$ag_team" ]] && continue
 
-  # Collect matching worktree names
-  local all_names
-  mapfile -t all_names < <(_ag_get_worktree_names)
+    # Extract the short name from the session name (repo-name → name)
+    local short_name="$sess"
+    # Check if already added from git worktree list
+    local already=false
+    for existing in "${all_entries[@]:-}"; do
+      if [[ "$existing" == *"|${sess}" ]]; then
+        already=true
+        break
+      fi
+    done
+    if [[ "$already" == false ]]; then
+      local wt_path="$sess_path"
+      all_entries+=("${short_name}|${wt_path}|unknown|${sess}")
+    fi
+  done <<< "$sessions"
+
+  # Match patterns against entries
   local to_remove=()
 
   for pattern in "${patterns[@]}"; do
     local matched=false
-    for name in "${all_names[@]}"; do
+    for entry in "${all_entries[@]:-}"; do
+      local entry_name="${entry%%|*}"
+      # Match against short name or full session name
       # shellcheck disable=SC2254
-      case "$name" in
-        $pattern)
-          # Avoid duplicates
+      case "$entry_name" in
+        $pattern|*-$pattern)
           local already=false
           for existing in "${to_remove[@]:-}"; do
-            if [[ "$existing" == "$name" ]]; then
+            if [[ "$existing" == "$entry" ]]; then
               already=true
               break
             fi
           done
           if [[ "$already" == false ]]; then
-            to_remove+=("$name")
+            to_remove+=("$entry")
           fi
           matched=true
           ;;
@@ -436,8 +477,13 @@ _ag_rm() {
 
   # Confirm
   echo "Will remove the following worktrees:"
-  for name in "${to_remove[@]}"; do
-    echo "  ${REPO_NAME}-${name} (branch: ${WT_BRANCH_PREFIX}/${name})"
+  for entry in "${to_remove[@]}"; do
+    IFS='|' read -r name wt_path branch session_name <<< "$entry"
+    if [[ "$branch" != "unknown" ]]; then
+      echo "  ${session_name} (branch: ${branch})"
+    else
+      echo "  ${session_name} (${wt_path})"
+    fi
   done
   echo ""
   read -r -p "Proceed? [y/N] " confirm
@@ -447,77 +493,8 @@ _ag_rm() {
   fi
 
   # Remove
-  for name in "${to_remove[@]}"; do
-    _ag_rm_worktree "$name" "${REPO_PARENT}/${REPO_NAME}-${name}" \
-      "${WT_BRANCH_PREFIX}/${name}" "${REPO_NAME}-${name}" "$force"
-  done
-}
-
-# Remove a worktree when called from outside any git repo.
-# Discovers worktrees by finding directories that match *-<pattern>.
-_ag_rm_anywhere() {
-  local force="$1"
-  shift
-  local patterns=("$@")
-  local to_remove=()  # each entry: "wt_path|name|session_name"
-
-  for pattern in "${patterns[@]}"; do
-    local matched=false
-    # Search for directories matching *-<pattern> by checking git worktree list
-    # from any matching directory we find
-    for candidate in *-${pattern} ../*-${pattern} ~/*-${pattern}; do
-      # Expand the glob
-      if [[ -d "$candidate" ]]; then
-        local abs_path
-        abs_path="$(cd "$candidate" && pwd)"
-        # Verify it's actually a git worktree
-        if git -C "$abs_path" rev-parse --show-toplevel &>/dev/null; then
-          local dir_name
-          dir_name="$(basename "$abs_path")"
-          local already=false
-          for existing in "${to_remove[@]:-}"; do
-            if [[ "$existing" == "$abs_path|"* ]]; then
-              already=true
-              break
-            fi
-          done
-          if [[ "$already" == false ]]; then
-            to_remove+=("$abs_path|$pattern|$dir_name")
-            matched=true
-          fi
-        fi
-      fi
-    done
-    if [[ "$matched" == false ]]; then
-      echo "ag rm: no worktree matching '$pattern' found nearby"
-    fi
-  done
-
-  if [[ ${#to_remove[@]} -eq 0 ]]; then
-    echo "Nothing to remove."
-    return 0
-  fi
-
-  # Confirm
-  echo "Will remove the following worktrees:"
   for entry in "${to_remove[@]}"; do
-    local wt_path="${entry%%|*}"
-    echo "  $(basename "$wt_path")  ($wt_path)"
-  done
-  echo ""
-  read -r -p "Proceed? [y/N] " confirm
-  if [[ "$confirm" != [yY] && "$confirm" != [yY][eE][sS] ]]; then
-    echo "Aborted."
-    return 0
-  fi
-
-  for entry in "${to_remove[@]}"; do
-    local wt_path="${entry%%|*}"
-    local rest="${entry#*|}"
-    local name="${rest%%|*}"
-    local session_name="${rest#*|}"
-    local branch="${WT_BRANCH_PREFIX}/${name}"
-
+    IFS='|' read -r name wt_path branch session_name <<< "$entry"
     _ag_rm_worktree "$name" "$wt_path" "$branch" "$session_name" "$force"
   done
 }
