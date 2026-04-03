@@ -263,13 +263,18 @@ _ag_ps() {
     local is_ag=false
     [[ -n "$ag_session" || -n "$ag_team_mode" ]] && is_ag=true
 
-    # Filter: without --all, only show ag-created sessions for this repo
+    # Filter: without --all, show ag-tagged sessions OR sessions matching repo prefix
     if [[ "$show_all" == false ]]; then
-      if [[ "$is_ag" == false ]]; then
-        continue
-      fi
-      if [[ -n "$repo_name" && "$sess" != "${repo_name}-"* ]]; then
-        continue
+      if [[ -n "$repo_name" ]]; then
+        # Inside a repo: show tagged sessions OR sessions matching repo-name prefix
+        if [[ "$is_ag" == false && "$sess" != "${repo_name}-"* ]]; then
+          continue
+        fi
+      else
+        # Outside a repo: only show tagged sessions
+        if [[ "$is_ag" == false ]]; then
+          continue
+        fi
       fi
     fi
 
