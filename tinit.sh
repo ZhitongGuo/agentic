@@ -141,6 +141,9 @@ if [[ "$SHOW_ALL" == true ]]; then
   # Create session — pane 0 is Master (full height left)
   tmux new-session -d -s "$SESSION" -c "$DIR"
 
+  # Tag as a team session so ag ps can identify it
+  tmux set-environment -t "$SESSION" AG_TEAM_MODE "show-all"
+
   if [[ "$EDITOR_PANE" == true ]]; then
     # Layout with --editor:
     # +----------+----------+-----------+
@@ -236,6 +239,9 @@ LAUNCHER_EOF
 
   # Create session with pane 0 (will be Master)
   tmux new-session -d -s "$SESSION" -c "$DIR"
+
+  # Tag as a team session so ag ps can identify it
+  tmux set-environment -t "$SESSION" AG_TEAM_MODE "background"
 
   if [[ "$EDITOR_PANE" == true ]]; then
     # Layout: [Master] [Nvim] [Terminal]

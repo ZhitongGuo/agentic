@@ -231,46 +231,53 @@ _ag_ls() {
 _ag_ps() {
   _ag_repo_info 2>/dev/null
   local repo_name="${REPO_NAME:-}"
-  local sessions
-  sessions="$(tmux list-sessions -F '#{session_name}' 2>/dev/null)" || {
+  local session_data
+  session_data="$(tmux list-sessions -F '#{session_name}|#{session_created}|#{session_activity}' 2>/dev/null)" || {
     echo "No tmux sessions running."
     return 0
   }
 
   local found=false
 
-  # If inside a repo, filter to sessions matching this repo
-  # Otherwise, show all sessions that look like ag-created ones (name-name pattern with agent suffixes)
-  printf "  %-30s %-10s\n" "SESSION" "TYPE"
-  printf "  %-30s %-10s\n" "-------" "----"
+  printf "  %-25s %-8s %-18s %-18s\n" "SESSION" "TYPE" "CREATED" "LAST ACTIVE"
+  printf "  %-25s %-8s %-18s %-18s\n" "-------" "----" "-------" "-----------"
 
-  echo "$sessions" | sort | while IFS= read -r sess; do
+  echo "$session_data" | sort | while IFS='|' read -r sess created activity; do
     local show=false
     local type="solo"
 
     if [[ -n "$repo_name" ]]; then
-      # Inside a repo: match sessions starting with repo name
       if [[ "$sess" == "${repo_name}-"* ]]; then
         show=true
       fi
     else
-      # Outside a repo: show sessions that have agent suffixes (likely ag-created)
       show=true
     fi
 
     if [[ "$show" == true ]]; then
-      # Determine type based on suffix
+      # Determine type
       if [[ "$sess" == *"-executor" ]]; then
         type="executor"
       elif [[ "$sess" == *"-validator" ]]; then
         type="validator"
       else
-        # Check if this session has associated executor/validator sessions
-        if echo "$sessions" | grep -q "^${sess}-executor$" 2>/dev/null; then
+        local team_mode
+        team_mode="$(tmux show-environment -t "$sess" AG_TEAM_MODE 2>/dev/null | cut -d= -f2-)"
+        if [[ "$team_mode" == "show-all" ]]; then
+          type="team"
+        elif [[ "$team_mode" == "background" ]]; then
+          type="master"
+        elif echo "$session_data" | grep -q "^${sess}-executor|" 2>/dev/null; then
           type="master"
         fi
       fi
-      printf "  %-30s %-10s\n" "$sess" "$type"
+
+      # Format timestamps
+      local created_fmt activity_fmt
+      created_fmt="$(date -d "@$created" '+%m/%d %H:%M' 2>/dev/null || date -r "$created" '+%m/%d %H:%M' 2>/dev/null || echo "$created")"
+      activity_fmt="$(date -d "@$activity" '+%m/%d %H:%M' 2>/dev/null || date -r "$activity" '+%m/%d %H:%M' 2>/dev/null || echo "$activity")"
+
+      printf "  %-25s %-8s %-18s %-18s\n" "$sess" "$type" "$created_fmt" "$activity_fmt"
       found=true
     fi
   done
