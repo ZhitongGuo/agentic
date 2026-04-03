@@ -4,7 +4,7 @@
 #   path           - directory to cd into (default: current directory)
 #   --session NAME - tmux session name (required)
 #   --no-attach    - create session without attaching (for batch creation)
-#   --team         - start a 3-agent team (Master, Executor, Validator)
+#   --team         - start a 4-agent team (Master, Researcher, Executor, Validator)
 #   --show-all     - show all agent panes (requires --team)
 #   --editor       - include an nvim pane (requires --show-all)
 
@@ -29,7 +29,7 @@ Arguments:
 Options:
   --session NAME   Tmux session name (required)
   --no-attach      Create session without attaching (for batch creation)
-  --team           Start a 3-agent team (Master, Executor, Validator)
+  --team           Start a 4-agent team (Master, Researcher, Executor, Validator)
   --show-all       Show all agent panes side by side (requires --team)
   --editor         Include an nvim pane
   --help, -h       Show this help message

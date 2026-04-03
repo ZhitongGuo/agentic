@@ -42,7 +42,7 @@ Usage:
 Options:
   --no-cd        (add) Don't cd into the worktree (single worktree only)
   --no-tmux      (add) Don't create a tmux session (just create the worktree)
-  --team         (add) Start a 3-agent team (Master, Executor, Validator)
+  --team         (add) Start a 4-agent team (Master, Researcher, Executor, Validator)
   --show-all     (add) Show all agent panes (requires --team)
   --editor       (add) Include an nvim pane
   --prefix PFX   (add) Override branch prefix (default: $WT_BRANCH_PREFIX)

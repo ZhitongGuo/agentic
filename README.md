@@ -37,7 +37,7 @@ Creates a tmux session with a vertical split: left pane runs Claude Code, right 
 tinit --session work              # create + attach, uses cwd
 tinit ~/project --session work    # create + attach, in ~/project
 tinit --session work --no-attach  # create without attaching
-tinit --session work --team       # start a 3-agent team
+tinit --session work --team       # start a 4-agent team
 tinit --session work --team --show-all  # team with all agents visible
 ```
 
@@ -45,7 +45,7 @@ tinit --session work --team --show-all  # team with all agents visible
 |------|-------------|
 | `--session NAME` | **(required)** Session name |
 | `--no-attach` | Create session without attaching |
-| `--team` | Start a 3-agent team (Master, Executor, Validator) |
+| `--team` | Start a 4-agent team (Master, Researcher, Executor, Validator) |
 | `--show-all` | Show all agent panes side by side (requires `--team`) |
 
 **Layouts:**
@@ -66,7 +66,7 @@ Creates and manages git worktrees for parallel agent workflows. Worktrees are cr
 ag add task1                            # create worktree + tmux session (default)
 ag add task1 --no-tmux                  # create worktree only, no tmux
 ag add task1 task2 task3                # create 3 worktrees with tmux sessions
-ag add task1 --team                     # create worktree with 3-agent team
+ag add task1 --team                     # create worktree with 4-agent team
 ag add task1 --team --show-all          # team with all agents visible
 ag add task1 --team --show-all --editor # team + nvim pane
 ag ls                                   # list active sessions (current repo)
@@ -91,7 +91,7 @@ ag rm 'task*' --force                   # glob remove, force delete
 | Flag | Description |
 |------|-------------|
 | `--no-tmux` | Don't create a tmux session (just create the worktree) |
-| `--team` | Start a 3-agent team (Master, Executor, Validator) |
+| `--team` | Start a 4-agent team (Master, Researcher, Executor, Validator) |
 | `--show-all` | Show all agent panes (requires `--team`) |
 | `--editor` | Include an nvim pane |
 | `--no-cd` | Don't cd into the worktree |
@@ -180,7 +180,7 @@ ag add bugfix --team --show-all
 # Spin up multiple worktrees with teams for parallel development
 ag add frontend backend database --team
 
-# Each worktree gets its own independent team of 3 agents.
+# Each worktree gets its own independent team of 4 agents.
 # The last one attaches; the others run in background sessions.
 #
 # Connect to any team's tmux session:
