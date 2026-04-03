@@ -63,21 +63,27 @@ Attaches with `tmux -CC` (iTerm2 control mode). Each pane is labeled with its ro
 Creates and manages git worktrees for parallel agent workflows. Worktrees are created at `<repo-parent>/<repo>-<name>` with branch `<prefix>/<name>`.
 
 ```bash
-ag add task1                      # create worktree + tmux session (default)
-ag add task1 --no-tmux            # create worktree only, no tmux
-ag add task1 task2 task3          # create 3 worktrees with tmux sessions
-ag add task1 --team               # create worktree with 3-agent team
-ag add task1 --team --show-all    # team with all agents visible
-ag ls                             # list worktrees
-ag rm task1                       # remove worktree + branch + agent sessions
-ag rm 'task*' --force             # glob remove, force delete
+ag add task1                            # create worktree + tmux session (default)
+ag add task1 --no-tmux                  # create worktree only, no tmux
+ag add task1 task2 task3                # create 3 worktrees with tmux sessions
+ag add task1 --team                     # create worktree with 3-agent team
+ag add task1 --team --show-all          # team with all agents visible
+ag add task1 --team --show-all --editor # team + nvim pane
+ag ls                                   # list active sessions (current repo)
+ag ls --all                             # list all sessions across all repos
+ag wt                                   # list worktrees
+ag attach feature                       # attach to a session (fuzzy match)
+ag rm task1                             # remove worktree + branch + sessions
+ag rm 'task*' --force                   # glob remove, force delete
 ```
 
 | Subcommand | Description |
 |------------|-------------|
-| `ag add <name> [...]` | Create worktree(s) |
-| `ag ls` | List worktrees for current repo |
-| `ag rm <pattern> [...]` | Remove worktree(s), kill tmux/agent sessions, delete branches |
+| `ag add <name> [...]` | Create worktree(s) with tmux sessions |
+| `ag ls [--all]` | List active tmux sessions (type, created, last active) |
+| `ag wt` | List worktrees for current repo |
+| `ag attach <name>` | Attach to a session (exact, repo-prefixed, or fuzzy match) |
+| `ag rm <pattern> [...]` | Remove worktree(s), kill sessions, delete branches |
 
 **`ag add` flags:**
 
@@ -86,6 +92,7 @@ ag rm 'task*' --force             # glob remove, force delete
 | `--no-tmux` | Don't create a tmux session (just create the worktree) |
 | `--team` | Start a 3-agent team (Master, Executor, Validator) |
 | `--show-all` | Show all agent panes (requires `--team`) |
+| `--editor` | Include an nvim pane |
 | `--no-cd` | Don't cd into the worktree |
 | `--prefix PFX` | Override branch prefix (default: `$WT_BRANCH_PREFIX`) |
 | `--branch NAME` | Use exact branch name (single worktree only) |
