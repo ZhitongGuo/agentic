@@ -452,23 +452,27 @@ _ag_rm() {
     local matched=false
     for entry in "${all_entries[@]:-}"; do
       local entry_name="${entry%%|*}"
-      # Match against short name or full session name
+      local entry_session="${entry##*|}"
+      # Match against: short name, full session name, or suffix
+      local does_match=false
       # shellcheck disable=SC2254
-      case "$entry_name" in
-        $pattern|*-$pattern)
-          local already=false
-          for existing in "${to_remove[@]:-}"; do
-            if [[ "$existing" == "$entry" ]]; then
-              already=true
-              break
-            fi
-          done
-          if [[ "$already" == false ]]; then
-            to_remove+=("$entry")
+      case "$entry_name" in $pattern|*-$pattern) does_match=true ;; esac
+      # shellcheck disable=SC2254
+      case "$entry_session" in $pattern) does_match=true ;; esac
+
+      if [[ "$does_match" == true ]]; then
+        local already=false
+        for existing in "${to_remove[@]:-}"; do
+          if [[ "$existing" == "$entry" ]]; then
+            already=true
+            break
           fi
-          matched=true
-          ;;
-      esac
+        done
+        if [[ "$already" == false ]]; then
+          to_remove+=("$entry")
+        fi
+        matched=true
+      fi
     done
     if [[ "$matched" == false ]]; then
       echo "ag rm: no worktree matching '$pattern'"
