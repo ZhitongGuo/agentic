@@ -17,6 +17,7 @@ ag() {
   case "$cmd" in
     add)  _ag_add "$@" ;;
     ls)   _ag_ls "$@" ;;
+    ps)   _ag_ps "$@" ;;
     rm)   _ag_rm "$@" ;;
     help|--help|-h) _ag_usage ;;
     *)
@@ -33,6 +34,7 @@ Usage:
   ag add <name> [name2 ...] [--no-tmux] [--no-cd] [--team [--show-all]]
                             [--prefix PREFIX] [--branch BRANCH]
   ag ls                                           List worktrees
+  ag ps                                           List active tmux sessions
   ag rm <pattern> [pattern2 ...] [--force]        Remove worktree(s)
 
 Options:
@@ -223,6 +225,62 @@ _ag_ls() {
 
   if [[ "$found" == false ]]; then
     echo "No worktrees found for ${REPO_NAME}"
+  fi
+}
+
+_ag_ps() {
+  _ag_repo_info 2>/dev/null
+  local repo_name="${REPO_NAME:-}"
+  local sessions
+  sessions="$(tmux list-sessions -F '#{session_name}' 2>/dev/null)" || {
+    echo "No tmux sessions running."
+    return 0
+  }
+
+  local found=false
+
+  # If inside a repo, filter to sessions matching this repo
+  # Otherwise, show all sessions that look like ag-created ones (name-name pattern with agent suffixes)
+  printf "  %-30s %-10s\n" "SESSION" "TYPE"
+  printf "  %-30s %-10s\n" "-------" "----"
+
+  echo "$sessions" | sort | while IFS= read -r sess; do
+    local show=false
+    local type="solo"
+
+    if [[ -n "$repo_name" ]]; then
+      # Inside a repo: match sessions starting with repo name
+      if [[ "$sess" == "${repo_name}-"* ]]; then
+        show=true
+      fi
+    else
+      # Outside a repo: show sessions that have agent suffixes (likely ag-created)
+      show=true
+    fi
+
+    if [[ "$show" == true ]]; then
+      # Determine type based on suffix
+      if [[ "$sess" == *"-executor" ]]; then
+        type="executor"
+      elif [[ "$sess" == *"-validator" ]]; then
+        type="validator"
+      else
+        # Check if this session has associated executor/validator sessions
+        if echo "$sessions" | grep -q "^${sess}-executor$" 2>/dev/null; then
+          type="master"
+        fi
+      fi
+      printf "  %-30s %-10s\n" "$sess" "$type"
+      found=true
+    fi
+  done
+
+  if [[ "$found" == false ]]; then
+    if [[ -n "$repo_name" ]]; then
+      echo "No ag sessions found for ${repo_name}"
+    else
+      echo "No tmux sessions running."
+    fi
   fi
 }
 

@@ -14,7 +14,7 @@ _ag_completions() {
 
   # Complete subcommand
   if [[ ${COMP_CWORD} -eq 1 ]]; then
-    COMPREPLY=($(compgen -W "add ls rm help" -- "$cur"))
+    COMPREPLY=($(compgen -W "add ls ps rm help" -- "$cur"))
     return
   fi
 
