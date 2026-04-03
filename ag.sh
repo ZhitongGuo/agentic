@@ -9,6 +9,7 @@
 
 AGENTIC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WT_BRANCH_PREFIX="${WT_BRANCH_PREFIX:-stephen}"
+AG_VCS=""  # set by _ag_repo_info: "git" or "sl"
 
 ag() {
   local cmd="${1:-help}"
@@ -50,6 +51,8 @@ Options:
   --prefix PFX   (add) Override branch prefix (default: $WT_BRANCH_PREFIX)
   --branch NAME  (add) Use exact branch name (single worktree only)
   --force        (rm)  Force remove even with uncommitted changes
+
+Supports both git and Sapling (sl) repositories.
 EOF
 }
 
@@ -114,10 +117,14 @@ _ag_update() {
 
 _ag_repo_info() {
   local toplevel
-  toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || {
-    echo "ag: not inside a git repository" >&2
+  if toplevel="$(sl root 2>/dev/null)"; then
+    AG_VCS="sl"
+  elif toplevel="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    AG_VCS="git"
+  else
+    echo "ag: not inside a git or sapling repository" >&2
     return 1
-  }
+  fi
   REPO_ROOT="$toplevel"
   REPO_NAME="$(basename "$REPO_ROOT")"
   REPO_PARENT="$(dirname "$REPO_ROOT")"
@@ -178,24 +185,34 @@ _ag_add() {
     fi
 
     if [[ -d "$wt_path" ]]; then
-      echo "ag: worktree '${REPO_NAME}-${name}' already exists at $wt_path"
+      echo "ag: worktree '${REPO_NAME}-${name}' already exists at $wt_path, attaching session"
+      created+=("$name")
       continue
     fi
 
-    if git show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
-      echo "ag: branch '${branch}' already exists, using it"
-      git worktree add "$wt_path" "$branch" || {
+    if [[ "$AG_VCS" == "sl" ]]; then
+      sl --config worktree.enabled=true worktree add "$wt_path" --label "$name" || {
         echo "ag: failed to create worktree for '$name'"
         continue
       }
+      # Create bookmark in the new worktree (ignore error if bookmark exists)
+      sl -R "$wt_path" bookmark "$branch" 2>/dev/null || true
     else
-      git worktree add -b "$branch" "$wt_path" || {
-        echo "ag: failed to create worktree for '$name'"
-        continue
-      }
+      if git show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
+        echo "ag: branch '${branch}' already exists, using it"
+        git worktree add "$wt_path" "$branch" || {
+          echo "ag: failed to create worktree for '$name'"
+          continue
+        }
+      else
+        git worktree add -b "$branch" "$wt_path" || {
+          echo "ag: failed to create worktree for '$name'"
+          continue
+        }
+      fi
     fi
 
-    echo "Created worktree: ${REPO_NAME}-${name} (branch: ${branch})"
+    echo "Created worktree: ${REPO_NAME}-${name} (${AG_VCS} ${AG_VCS:+: }${branch})"
     created+=("$name")
   done
 
@@ -268,23 +285,35 @@ _ag_wt() {
   local prefix="${REPO_PARENT}/${REPO_NAME}-"
   local found=false
 
-  while IFS= read -r line; do
-    local wt_path wt_branch
-    wt_path="$(echo "$line" | awk '{print $1}')"
-    wt_branch="$(echo "$line" | awk '{print $3}' | tr -d '[]')"
-
-    # Skip the main worktree
-    if [[ "$wt_path" == "$REPO_ROOT" ]]; then
-      continue
-    fi
-
-    # Only show worktrees that match our naming convention
-    if [[ "$wt_path" == ${prefix}* ]]; then
+  if [[ "$AG_VCS" == "sl" ]]; then
+    for wt_path in "${prefix}"*/; do
+      [[ -d "$wt_path" ]] || continue
+      wt_path="${wt_path%/}"
+      local bookmark
+      bookmark="$(sl -R "$wt_path" log -r . --template '{bookmarks}' 2>/dev/null || echo '?')"
       local suffix="${wt_path#${prefix}}"
-      printf "  %-20s %-30s %s\n" "$suffix" "$wt_branch" "$wt_path"
+      printf "  %-20s %-30s %s\n" "$suffix" "$bookmark" "$wt_path"
       found=true
-    fi
-  done < <(git worktree list)
+    done
+  else
+    while IFS= read -r line; do
+      local wt_path wt_branch
+      wt_path="$(echo "$line" | awk '{print $1}')"
+      wt_branch="$(echo "$line" | awk '{print $3}' | tr -d '[]')"
+
+      # Skip the main worktree
+      if [[ "$wt_path" == "$REPO_ROOT" ]]; then
+        continue
+      fi
+
+      # Only show worktrees that match our naming convention
+      if [[ "$wt_path" == ${prefix}* ]]; then
+        local suffix="${wt_path#${prefix}}"
+        printf "  %-20s %-30s %s\n" "$suffix" "$wt_branch" "$wt_path"
+        found=true
+      fi
+    done < <(git worktree list)
+  fi
 
   if [[ "$found" == false ]]; then
     echo "No worktrees found for ${REPO_NAME}"
@@ -428,6 +457,15 @@ _ag_get_worktree_names() {
   _ag_repo_info 2>/dev/null || return 1
   local prefix="${REPO_PARENT}/${REPO_NAME}-"
 
+  if [[ "$AG_VCS" == "sl" ]]; then
+    for wt_path in "${prefix}"*/; do
+      [[ -d "$wt_path" ]] || continue
+      wt_path="${wt_path%/}"
+      echo "${wt_path#${prefix}}"
+    done
+    return
+  fi
+
   git worktree list 2>/dev/null | while IFS= read -r line; do
     local wt_path
     wt_path="$(echo "$line" | awk '{print $1}')"
@@ -459,21 +497,32 @@ _ag_rm() {
   local repo_name="${REPO_NAME:-}"
 
   # Build list of known worktrees from two sources:
-  # 1. git worktree list (if inside a repo)
+  # 1. git/sl worktree list (if inside a repo)
   # 2. ag-tagged tmux sessions (works from anywhere)
   local all_entries=()  # each: "name|wt_path|branch|session_name"
 
-  # Source 1: git worktree list
+  # Source 1: git/sl worktree list
   if [[ -n "$repo_name" ]]; then
     local prefix="${REPO_PARENT}/${REPO_NAME}-"
-    while IFS= read -r line; do
-      local wt_path
-      wt_path="$(echo "$line" | awk '{print $1}')"
-      if [[ "$wt_path" == ${prefix}* && "$wt_path" != "$REPO_ROOT" ]]; then
-        local suffix="${wt_path#${prefix}}"
-        all_entries+=("${suffix}|${wt_path}|${WT_BRANCH_PREFIX}/${suffix}|${REPO_NAME}-${suffix}")
-      fi
-    done < <(git worktree list 2>/dev/null)
+    if [[ "$AG_VCS" == "sl" ]]; then
+      for wt_path in "${prefix}"*/; do
+        [[ -d "$wt_path" ]] || continue
+        wt_path="${wt_path%/}"
+        if [[ "$wt_path" != "$REPO_ROOT" ]]; then
+          local suffix="${wt_path#${prefix}}"
+          all_entries+=("${suffix}|${wt_path}|${WT_BRANCH_PREFIX}/${suffix}|${REPO_NAME}-${suffix}")
+        fi
+      done
+    else
+      while IFS= read -r line; do
+        local wt_path
+        wt_path="$(echo "$line" | awk '{print $1}')"
+        if [[ "$wt_path" == ${prefix}* && "$wt_path" != "$REPO_ROOT" ]]; then
+          local suffix="${wt_path#${prefix}}"
+          all_entries+=("${suffix}|${wt_path}|${WT_BRANCH_PREFIX}/${suffix}|${REPO_NAME}-${suffix}")
+        fi
+      done < <(git worktree list 2>/dev/null)
+    fi
   fi
 
   # Source 2: ag-tagged tmux sessions (catches worktrees from other repos)
@@ -492,7 +541,7 @@ _ag_rm() {
 
     # Extract the short name from the session name (repo-name → name)
     local short_name="$sess"
-    # Check if already added from git worktree list
+    # Check if already added from git/sl worktree list
     local already=false
     for existing in "${all_entries[@]:-}"; do
       if [[ "$existing" == *"|${sess}" ]]; then
@@ -545,12 +594,15 @@ _ag_rm() {
     return 0
   fi
 
+  local ref_label="branch"
+  [[ "$AG_VCS" == "sl" ]] && ref_label="bookmark"
+
   # Confirm
   echo "Will remove the following worktrees:"
   for entry in "${to_remove[@]}"; do
     IFS='|' read -r name wt_path branch session_name <<< "$entry"
     if [[ "$branch" != "unknown" ]]; then
-      echo "  ${session_name} (branch: ${branch})"
+      echo "  ${session_name} (${ref_label}: ${branch})"
     else
       echo "  ${session_name} (${wt_path})"
     fi
@@ -569,6 +621,71 @@ _ag_rm() {
   done
 }
 
+# Remove a worktree when called from outside any git/sl repo.
+# Discovers worktrees by finding directories that match *-<pattern>.
+_ag_rm_anywhere() {
+  local force="$1"
+  shift
+  local patterns=("$@")
+  local to_remove=()  # each entry: "wt_path|name|session_name"
+
+  for pattern in "${patterns[@]}"; do
+    local matched=false
+    # Search for directories matching *-<pattern>
+    for candidate in *-${pattern} ../*-${pattern} ~/*-${pattern}; do
+      # Expand the glob
+      if [[ -d "$candidate" ]]; then
+        local abs_path
+        abs_path="$(cd "$candidate" && pwd)"
+        # Verify it's a git or sl worktree
+        if git -C "$abs_path" rev-parse --show-toplevel &>/dev/null || \
+           sl -R "$abs_path" root &>/dev/null 2>/dev/null; then
+          local dir_name
+          dir_name="$(basename "$abs_path")"
+          local already=false
+          for existing in "${to_remove[@]:-}"; do
+            if [[ "$existing" == "$abs_path|"* ]]; then
+              already=true
+              break
+            fi
+          done
+          if [[ "$already" == false ]]; then
+            to_remove+=("$abs_path|$pattern|$dir_name")
+            matched=true
+          fi
+        fi
+      fi
+    done
+    if [[ "$matched" == false ]]; then
+      echo "ag rm: no worktree matching '$pattern' found nearby"
+    fi
+  done
+
+  if [[ ${#to_remove[@]} -eq 0 ]]; then
+    echo "Nothing to remove."
+    return 0
+  fi
+
+  # Confirm
+  echo "Will remove the following worktrees:"
+  for entry in "${to_remove[@]}"; do
+    IFS='|' read -r wt_path name session_name <<< "$entry"
+    echo "  ${session_name} (${wt_path})"
+  done
+  echo ""
+  read -r -p "Proceed? [y/N] " confirm
+  if [[ "$confirm" != [yY] && "$confirm" != [yY][eE][sS] ]]; then
+    echo "Aborted."
+    return 0
+  fi
+
+  # Remove
+  for entry in "${to_remove[@]}"; do
+    IFS='|' read -r wt_path name session_name <<< "$entry"
+    _ag_rm_worktree "$name" "$wt_path" "unknown" "$session_name" "$force"
+  done
+}
+
 # Shared worktree removal logic used by both _ag_rm and _ag_rm_anywhere.
 _ag_rm_worktree() {
   local name="$1"
@@ -576,6 +693,16 @@ _ag_rm_worktree() {
   local branch="$3"
   local session_name="$4"
   local force="$5"
+
+  # Detect VCS from worktree path
+  local vcs="git"
+  [[ -d "$wt_path/.sl" ]] && vcs="sl"
+
+  # For sl: capture main repo before removal (worktree dir disappears after remove)
+  local sl_main_repo=""
+  if [[ "$vcs" == "sl" ]]; then
+    sl_main_repo="$(sl --config worktree.enabled=true -R "$wt_path" worktree list 2>/dev/null | head -1 | awk '{print $1}')" || true
+  fi
 
   # Kill team agent sessions
   "$AGENTIC_DIR/team-stop.sh" "$session_name" "$wt_path" || true
@@ -605,40 +732,53 @@ _ag_rm_worktree() {
   fi
 
   # Remove worktree
-  if [[ "$force" == true ]]; then
-    git -C "$wt_path" worktree remove --force "$wt_path" 2>/dev/null || \
-    git worktree remove --force "$wt_path" 2>/dev/null || {
+  if [[ "$vcs" == "sl" ]]; then
+    local sl_rm_args=()
+    [[ "$force" == true ]] && sl_rm_args+=(-y)
+    sl --config worktree.enabled=true worktree remove "$wt_path" "${sl_rm_args[@]}" 2>/dev/null || {
       echo "ag: failed to remove worktree '$name'"
       return 1
     }
+    # Delete bookmark from main repo
+    if [[ -n "$sl_main_repo" ]]; then
+      sl -R "$sl_main_repo" bookmark -d "$branch" 2>/dev/null || true
+    fi
   else
-    git -C "$wt_path" worktree remove "$wt_path" 2>/dev/null || \
-    git worktree remove "$wt_path" 2>/dev/null || {
-      echo "ag: failed to remove worktree '$name' (use --force to override)"
-      return 1
-    }
-  fi
-
-  # Delete branch (need to run from the main repo, not the worktree)
-  local main_repo
-  main_repo="$(git -C "$wt_path" worktree list 2>/dev/null | head -1 | awk '{print $1}')" || true
-  if [[ -z "$main_repo" ]]; then
-    # Worktree already removed, try to find main repo from parent dir
-    for d in "$(dirname "$wt_path")"/*/; do
-      if git -C "$d" rev-parse --show-toplevel &>/dev/null 2>&1; then
-        main_repo="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" || true
-        break
-      fi
-    done
-  fi
-
-  if [[ -n "$main_repo" ]] && git -C "$main_repo" show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
     if [[ "$force" == true ]]; then
-      git -C "$main_repo" branch -D "$branch" 2>/dev/null || true
-    else
-      git -C "$main_repo" branch -d "$branch" 2>/dev/null || {
-        echo "ag: branch '$branch' has unmerged changes (use --force to delete)"
+      git -C "$wt_path" worktree remove --force "$wt_path" 2>/dev/null || \
+      git worktree remove --force "$wt_path" 2>/dev/null || {
+        echo "ag: failed to remove worktree '$name'"
+        return 1
       }
+    else
+      git -C "$wt_path" worktree remove "$wt_path" 2>/dev/null || \
+      git worktree remove "$wt_path" 2>/dev/null || {
+        echo "ag: failed to remove worktree '$name' (use --force to override)"
+        return 1
+      }
+    fi
+
+    # Delete branch (need to run from the main repo, not the worktree)
+    local main_repo
+    main_repo="$(git -C "$wt_path" worktree list 2>/dev/null | head -1 | awk '{print $1}')" || true
+    if [[ -z "$main_repo" ]]; then
+      # Worktree already removed, try to find main repo from parent dir
+      for d in "$(dirname "$wt_path")"/*/; do
+        if git -C "$d" rev-parse --show-toplevel &>/dev/null 2>&1; then
+          main_repo="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" || true
+          break
+        fi
+      done
+    fi
+
+    if [[ -n "$main_repo" ]] && git -C "$main_repo" show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
+      if [[ "$force" == true ]]; then
+        git -C "$main_repo" branch -D "$branch" 2>/dev/null || true
+      else
+        git -C "$main_repo" branch -d "$branch" 2>/dev/null || {
+          echo "ag: branch '$branch' has unmerged changes (use --force to delete)"
+        }
+      fi
     fi
   fi
 

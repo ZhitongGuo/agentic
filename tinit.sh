@@ -84,7 +84,6 @@ if [[ "$SHOW_ALL" == true && "$TEAM_MODE" == false ]]; then
   exit 1
 fi
 
-
 # Kill existing session if it exists
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
@@ -92,28 +91,27 @@ tmux kill-session -t "$SESSION" 2>/dev/null || true
 # Simple mode (no --team): Claude + terminal
 # ---------------------------------------------------------------------------
 if [[ "$TEAM_MODE" == false ]]; then
-  tmux new-session -d -s "$SESSION" -c "$DIR"
+  P0=$(tmux new-session -d -s "$SESSION" -c "$DIR" -P -F '#{pane_id}')
   tmux set-environment -t "$SESSION" AG_SESSION "solo"
 
   if [[ "$EDITOR_PANE" == true ]]; then
     # Layout: [Claude] [Nvim] [Terminal]
-    #         left      mid    right
-    tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
-    tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
+    P1=$(tmux split-window -h -t "$P0" -c "$DIR" -p 66 -P -F '#{pane_id}')
+    P2=$(tmux split-window -h -t "$P1" -c "$DIR" -p 50 -P -F '#{pane_id}')
 
     sleep 1
 
-    tmux send-keys -t "$SESSION:0.0" 'claude --dangerously-enable-internet-mode --dangerously-skip-permissions' C-m
-    tmux send-keys -t "$SESSION:0.1" "nvim" C-m
-    tmux select-pane -t "$SESSION:0.2"
+    tmux send-keys -t "$P0" 'claude --dangerously-skip-permissions' C-m
+    tmux send-keys -t "$P1" "nvim" C-m
+    tmux select-pane -t "$P2"
   else
     # Layout: [Claude] [Terminal]
-    tmux split-window -h -t "$SESSION" -c "$DIR"
+    P1=$(tmux split-window -h -t "$P0" -c "$DIR" -P -F '#{pane_id}')
 
     sleep 1
 
-    tmux send-keys -t "$SESSION:0.0" 'claude --dangerously-enable-internet-mode --dangerously-skip-permissions' C-m
-    tmux select-pane -t "$SESSION:0.1"
+    tmux send-keys -t "$P0" 'claude --dangerously-skip-permissions' C-m
+    tmux select-pane -t "$P1"
   fi
 
   if [[ "$NO_ATTACH" == false ]]; then
@@ -143,8 +141,8 @@ if [[ "$SHOW_ALL" == true ]]; then
   EXECUTOR_LAUNCHER="${LAUNCHERS[2]}"
   VALIDATOR_LAUNCHER="${LAUNCHERS[3]}"
 
-  # Create session — pane 0 is Master (full height left)
-  tmux new-session -d -s "$SESSION" -c "$DIR"
+  # Create session — P0 is Master (full height left)
+  P0=$(tmux new-session -d -s "$SESSION" -c "$DIR" -P -F '#{pane_id}')
 
   # Tag as a team session so ag ls can identify it
   tmux set-environment -t "$SESSION" AG_TEAM_MODE "show-all"
@@ -160,39 +158,39 @@ if [[ "$SHOW_ALL" == true ]]; then
     # +----------+------------+-----------+
 
     # Split right 2/3 for middle+right columns
-    tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
+    P1=$(tmux split-window -h -t "$P0" -c "$DIR" -p 66 -P -F '#{pane_id}')
 
     # Split that into middle and right columns
-    tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
+    P4=$(tmux split-window -h -t "$P1" -c "$DIR" -p 50 -P -F '#{pane_id}')
 
     # Split middle column into 3: Researcher / Executor / Validator
-    tmux split-window -v -t "$SESSION:0.1" -c "$DIR" -p 66
-    tmux split-window -v -t "$SESSION:0.2" -c "$DIR" -p 50
+    P2=$(tmux split-window -v -t "$P1" -c "$DIR" -p 66 -P -F '#{pane_id}')
+    P3=$(tmux split-window -v -t "$P2" -c "$DIR" -p 50 -P -F '#{pane_id}')
 
     # Split right column: Nvim (top) / Terminal (bottom)
-    tmux split-window -v -t "$SESSION:0.4" -c "$DIR" -p 50
+    P5=$(tmux split-window -v -t "$P4" -c "$DIR" -p 50 -P -F '#{pane_id}')
 
     # Panes:
-    #   0 = Master (left, full height)
-    #   1 = Researcher (top-middle)
-    #   2 = Executor (mid-middle)
-    #   3 = Validator (bottom-middle)
-    #   4 = Nvim (top-right)
-    #   5 = Terminal (bottom-right)
+    #   P0 = Master (left, full height)
+    #   P1 = Researcher (top-middle)
+    #   P2 = Executor (mid-middle)
+    #   P3 = Validator (bottom-middle)
+    #   P4 = Nvim (top-right)
+    #   P5 = Terminal (bottom-right)
 
     sleep 1
 
-    tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
-    tmux send-keys -t "$SESSION:0.1" "'$RESEARCHER_LAUNCHER'" C-m
-    tmux send-keys -t "$SESSION:0.2" "'$EXECUTOR_LAUNCHER'" C-m
-    tmux send-keys -t "$SESSION:0.3" "'$VALIDATOR_LAUNCHER'" C-m
-    tmux send-keys -t "$SESSION:0.4" "nvim" C-m
+    tmux send-keys -t "$P0" "'$MASTER_LAUNCHER'" C-m
+    tmux send-keys -t "$P1" "'$RESEARCHER_LAUNCHER'" C-m
+    tmux send-keys -t "$P2" "'$EXECUTOR_LAUNCHER'" C-m
+    tmux send-keys -t "$P3" "'$VALIDATOR_LAUNCHER'" C-m
+    tmux send-keys -t "$P4" "nvim" C-m
 
     # Select the terminal pane
-    tmux select-pane -t "$SESSION:0.5"
+    tmux select-pane -t "$P5"
 
   else
-    # Layout without --editor:
+    # Layout:
     # +----------+----------+-----------+
     # |          | EXECUTOR | RESEARCHER|
     # |  MASTER  +----------+-----------+
@@ -200,31 +198,31 @@ if [[ "$SHOW_ALL" == true ]]; then
     # +----------+----------+-----------+
 
     # Split into 3 columns
-    tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
-    tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
+    P1=$(tmux split-window -h -t "$P0" -c "$DIR" -p 66 -P -F '#{pane_id}')
+    P2=$(tmux split-window -h -t "$P1" -c "$DIR" -p 50 -P -F '#{pane_id}')
 
     # Split middle column: Executor (top) / Validator (bottom)
-    tmux split-window -v -t "$SESSION:0.1" -c "$DIR" -p 50
+    P_VALIDATOR=$(tmux split-window -v -t "$P1" -c "$DIR" -p 50 -P -F '#{pane_id}')
 
     # Split right column: Researcher (top) / Terminal (bottom)
-    tmux split-window -v -t "$SESSION:0.3" -c "$DIR" -p 50
+    P_TERMINAL=$(tmux split-window -v -t "$P2" -c "$DIR" -p 50 -P -F '#{pane_id}')
 
     # Panes:
-    #   0 = Master (left, full height)
-    #   1 = Executor (top-middle)
-    #   2 = Validator (bottom-middle)
-    #   3 = Researcher (top-right)
-    #   4 = Terminal (bottom-right)
+    #   P0        = Master (left, full height)
+    #   P1        = Executor (top-middle)
+    #   P_VALIDATOR = Validator (bottom-middle)
+    #   P2        = Researcher (top-right)
+    #   P_TERMINAL  = Terminal (bottom-right)
 
     sleep 1
 
-    tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
-    tmux send-keys -t "$SESSION:0.1" "'$EXECUTOR_LAUNCHER'" C-m
-    tmux send-keys -t "$SESSION:0.2" "'$VALIDATOR_LAUNCHER'" C-m
-    tmux send-keys -t "$SESSION:0.3" "'$RESEARCHER_LAUNCHER'" C-m
+    tmux send-keys -t "$P0" "'$MASTER_LAUNCHER'" C-m
+    tmux send-keys -t "$P1" "'$EXECUTOR_LAUNCHER'" C-m
+    tmux send-keys -t "$P_VALIDATOR" "'$VALIDATOR_LAUNCHER'" C-m
+    tmux send-keys -t "$P2" "'$RESEARCHER_LAUNCHER'" C-m
 
     # Select the terminal pane
-    tmux select-pane -t "$SESSION:0.4"
+    tmux select-pane -t "$P_TERMINAL"
   fi
 
 else
@@ -243,7 +241,7 @@ echo "+------------------------+"
 echo "|  MASTER                |"
 echo "+------------------------+"
 echo ""
-exec claude --dangerously-enable-internet-mode --dangerously-skip-permissions \\
+exec claude --dangerously-skip-permissions \\
   --settings '${AGENTIC_DIR}/profiles/master.json' \\
   --append-system-prompt "\$(cat '${MASTER_PROMPT_FILE}')"
 LAUNCHER_EOF
@@ -252,30 +250,30 @@ LAUNCHER_EOF
   # Start Executor and Validator in background tmux sessions
   "$AGENTIC_DIR/team-start.sh" "$SESSION" "$DIR"
 
-  # Create session with pane 0 (will be Master)
-  tmux new-session -d -s "$SESSION" -c "$DIR"
+  # Create session
+  P0=$(tmux new-session -d -s "$SESSION" -c "$DIR" -P -F '#{pane_id}')
 
   # Tag as a team session so ag ps can identify it
   tmux set-environment -t "$SESSION" AG_TEAM_MODE "background"
 
   if [[ "$EDITOR_PANE" == true ]]; then
     # Layout: [Master] [Nvim] [Terminal]
-    tmux split-window -h -t "$SESSION:0.0" -c "$DIR" -p 66
-    tmux split-window -h -t "$SESSION:0.1" -c "$DIR" -p 50
+    P1=$(tmux split-window -h -t "$P0" -c "$DIR" -p 66 -P -F '#{pane_id}')
+    P2=$(tmux split-window -h -t "$P1" -c "$DIR" -p 50 -P -F '#{pane_id}')
 
     sleep 1
 
-    tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
-    tmux send-keys -t "$SESSION:0.1" "nvim" C-m
-    tmux select-pane -t "$SESSION:0.2"
+    tmux send-keys -t "$P0" "'$MASTER_LAUNCHER'" C-m
+    tmux send-keys -t "$P1" "nvim" C-m
+    tmux select-pane -t "$P2"
   else
     # Layout: [Master] [Terminal]
-    tmux split-window -h -t "$SESSION" -c "$DIR"
+    P1=$(tmux split-window -h -t "$P0" -c "$DIR" -P -F '#{pane_id}')
 
     sleep 1
 
-    tmux send-keys -t "$SESSION:0.0" "'$MASTER_LAUNCHER'" C-m
-    tmux select-pane -t "$SESSION:0.1"
+    tmux send-keys -t "$P0" "'$MASTER_LAUNCHER'" C-m
+    tmux select-pane -t "$P1"
   fi
 fi
 

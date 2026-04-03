@@ -153,7 +153,7 @@ echo "+------------------------+"
 echo "${banner}"
 echo "+------------------------+"
 echo ""
-exec claude --dangerously-enable-internet-mode --dangerously-skip-permissions \\
+exec claude --dangerously-skip-permissions \\
   --settings '${SCRIPT_DIR}/profiles/${role}.json' \\
   --append-system-prompt "\$(cat '${prompt_file}')"
 LAUNCHER_EOF
