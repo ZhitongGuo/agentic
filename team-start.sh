@@ -162,6 +162,7 @@ launch_agent() {
 
   # Create new session in the worktree directory
   tmux new-session -d -s "$session" -c "$WORKTREE_PATH"
+  tmux set-environment -t "$session" AG_SESSION "$role"
 
   # Wait for shell to initialize
   sleep 1

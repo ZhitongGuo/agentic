@@ -235,7 +235,7 @@ _ag_ps() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --all|-a) show_all=true; shift ;;
-      --*)      echo "ag ps: unknown flag '$1'"; return 1 ;;
+      --*)      echo "ag ls: unknown flag '$1'"; return 1 ;;
       *)        shift ;;
     esac
   done
@@ -256,43 +256,45 @@ _ag_ps() {
   local output=""
 
   while IFS='|' read -r sess created activity; do
-    local show=false
-    local type="solo"
+    # Check ag tags
+    local ag_session ag_team_mode
+    ag_session="$(tmux show-environment -t "$sess" AG_SESSION 2>/dev/null | cut -d= -f2-)"
+    ag_team_mode="$(tmux show-environment -t "$sess" AG_TEAM_MODE 2>/dev/null | cut -d= -f2-)"
+    local is_ag=false
+    [[ -n "$ag_session" || -n "$ag_team_mode" ]] && is_ag=true
 
-    if [[ -n "$repo_name" ]]; then
-      if [[ "$sess" == "${repo_name}-"* ]]; then
-        show=true
+    # Filter: without --all, only show ag-created sessions for this repo
+    if [[ "$show_all" == false ]]; then
+      if [[ "$is_ag" == false ]]; then
+        continue
       fi
-    else
-      show=true
+      if [[ -n "$repo_name" && "$sess" != "${repo_name}-"* ]]; then
+        continue
+      fi
     fi
 
-    if [[ "$show" == true ]]; then
-      # Determine type
-      if [[ "$sess" == *"-executor" ]]; then
+    # Determine type
+    local type="-"
+    if [[ "$is_ag" == true ]]; then
+      type="solo"
+      if [[ "$ag_team_mode" == "show-all" ]]; then
+        type="team"
+      elif [[ "$ag_team_mode" == "background" ]]; then
+        type="master"
+      elif [[ "$ag_session" == "executor" ]]; then
         type="executor"
-      elif [[ "$sess" == *"-validator" ]]; then
+      elif [[ "$ag_session" == "validator" ]]; then
         type="validator"
-      else
-        local team_mode
-        team_mode="$(tmux show-environment -t "$sess" AG_TEAM_MODE 2>/dev/null | cut -d= -f2-)"
-        if [[ "$team_mode" == "show-all" ]]; then
-          type="team"
-        elif [[ "$team_mode" == "background" ]]; then
-          type="master"
-        elif echo "$session_data" | grep -q "^${sess}-executor|" 2>/dev/null; then
-          type="master"
-        fi
       fi
-
-      # Format timestamps
-      local created_fmt activity_fmt
-      created_fmt="$(date -d "@$created" '+%m/%d %H:%M' 2>/dev/null || date -r "$created" '+%m/%d %H:%M' 2>/dev/null || echo "$created")"
-      activity_fmt="$(date -d "@$activity" '+%m/%d %H:%M' 2>/dev/null || date -r "$activity" '+%m/%d %H:%M' 2>/dev/null || echo "$activity")"
-
-      output+="$(printf "  %-25s %-8s %-18s %-18s\n" "$sess" "$type" "$created_fmt" "$activity_fmt")"$'\n'
-      found=true
     fi
+
+    # Format timestamps
+    local created_fmt activity_fmt
+    created_fmt="$(date -d "@$created" '+%m/%d %H:%M' 2>/dev/null || date -r "$created" '+%m/%d %H:%M' 2>/dev/null || echo "$created")"
+    activity_fmt="$(date -d "@$activity" '+%m/%d %H:%M' 2>/dev/null || date -r "$activity" '+%m/%d %H:%M' 2>/dev/null || echo "$activity")"
+
+    output+="$(printf "  %-25s %-8s %-18s %-18s\n" "$sess" "$type" "$created_fmt" "$activity_fmt")"$'\n'
+    found=true
   done < <(echo "$session_data" | sort)
 
   if [[ "$found" == true ]]; then

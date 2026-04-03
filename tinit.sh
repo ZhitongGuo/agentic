@@ -93,6 +93,7 @@ tmux kill-session -t "$SESSION" 2>/dev/null || true
 # ---------------------------------------------------------------------------
 if [[ "$TEAM_MODE" == false ]]; then
   tmux new-session -d -s "$SESSION" -c "$DIR"
+  tmux set-environment -t "$SESSION" AG_SESSION "solo"
 
   if [[ "$EDITOR_PANE" == true ]]; then
     # Layout: [Claude] [Nvim] [Terminal]
