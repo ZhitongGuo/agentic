@@ -20,6 +20,7 @@ ag() {
     wt)   _ag_wt "$@" ;;
     attach) _ag_attach "$@" ;;
     rm)   _ag_rm "$@" ;;
+    update) _ag_update "$@" ;;
     help|--help|-h) _ag_usage ;;
     *)
       echo "ag: unknown command '$cmd'"
@@ -38,6 +39,7 @@ Usage:
   ag wt                                           List worktrees
   ag attach <name>                                Attach to a session
   ag rm <pattern> [pattern2 ...] [--force]        Remove worktree(s)
+  ag update                                       Pull latest and reload
 
 Options:
   --no-cd        (add) Don't cd into the worktree (single worktree only)
@@ -49,6 +51,65 @@ Options:
   --branch NAME  (add) Use exact branch name (single worktree only)
   --force        (rm)  Force remove even with uncommitted changes
 EOF
+}
+
+_ag_update() {
+  echo "Updating agentic..."
+  local prev_dir="$(pwd)"
+
+  cd "$AGENTIC_DIR" || {
+    echo "ag update: cannot cd to $AGENTIC_DIR" >&2
+    return 1
+  }
+
+  # Check for uncommitted changes
+  if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+    echo "ag update: you have local changes in $AGENTIC_DIR"
+    echo "Stashing them before pulling..."
+    git stash push -m "ag update auto-stash $(date '+%Y-%m-%d %H:%M:%S')" || {
+      echo "ag update: stash failed, aborting" >&2
+      cd "$prev_dir"
+      return 1
+    }
+    local stashed=true
+  fi
+
+  # Pull latest
+  local before
+  before="$(git rev-parse HEAD)"
+  git pull --rebase origin main || {
+    echo "ag update: pull failed" >&2
+    if [[ "${stashed:-}" == true ]]; then
+      echo "Restoring stashed changes..."
+      git stash pop
+    fi
+    cd "$prev_dir"
+    return 1
+  }
+  local after
+  after="$(git rev-parse HEAD)"
+
+  # Restore stashed changes
+  if [[ "${stashed:-}" == true ]]; then
+    git stash pop || echo "Warning: stash pop failed, your changes are still stashed"
+  fi
+
+  cd "$prev_dir"
+
+  # Show what changed
+  if [[ "$before" == "$after" ]]; then
+    echo "Already up to date."
+  else
+    echo ""
+    echo "Updated $(git -C "$AGENTIC_DIR" log --oneline "${before}..${after}" | wc -l) commit(s):"
+    git -C "$AGENTIC_DIR" log --oneline "${before}..${after}"
+    echo ""
+  fi
+
+  # Reload ag.sh
+  echo "Reloading ag..."
+  source "$AGENTIC_DIR/ag.sh"
+  echo "Done."
 }
 
 _ag_repo_info() {
