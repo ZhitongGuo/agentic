@@ -130,11 +130,11 @@ VALIDATOR_SESSION="${SESSION}-validator"
 if [[ "$SHOW_ALL" == true ]]; then
   # All agents run directly in panes (no background sessions, no nesting).
 
+  LAUNCHERS=()
   if [[ "$EDITOR_PANE" == true ]]; then
-    # Get launcher scripts with editor pane layout
-    PANE_LAYOUT=editor mapfile -t LAUNCHERS < <("$AGENTIC_DIR/team-start.sh" "$SESSION" "$DIR" --launchers-only --pane-mode)
+    while IFS= read -r _line; do LAUNCHERS+=("$_line"); done < <(PANE_LAYOUT=editor "$AGENTIC_DIR/team-start.sh" "$SESSION" "$DIR" --launchers-only --pane-mode)
   else
-    PANE_LAYOUT=no-editor mapfile -t LAUNCHERS < <("$AGENTIC_DIR/team-start.sh" "$SESSION" "$DIR" --launchers-only --pane-mode)
+    while IFS= read -r _line; do LAUNCHERS+=("$_line"); done < <(PANE_LAYOUT=no-editor "$AGENTIC_DIR/team-start.sh" "$SESSION" "$DIR" --launchers-only --pane-mode)
   fi
   MASTER_LAUNCHER="${LAUNCHERS[0]}"
   RESEARCHER_LAUNCHER="${LAUNCHERS[1]}"
