@@ -8,7 +8,7 @@
 #   ag rm <pattern> [pattern2 ...] [--force]
 
 AGENTIC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WT_BRANCH_PREFIX="${WT_BRANCH_PREFIX:-stephen}"
+WT_BRANCH_PREFIX="${WT_BRANCH_PREFIX:-paytonguo}"
 AG_VCS=""  # set by _ag_repo_info: "git" or "sl"
 
 ag() {
